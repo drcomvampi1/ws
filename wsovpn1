@@ -1245,7 +1245,7 @@ echo -e " Creating Menu scripts.."
 
 cd /usr/local/sbin/
 rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
-wget -q 'https://github.com/yue0706/parte/raw/main/fixed1.zip'
+wget -q 'https://github.com/yakult13/parte/raw/main/fixed1.zip'
 unzip -qq fixed1.zip
 rm -f fixed1.zip
 chmod +x ./*
@@ -1274,7 +1274,7 @@ function ScriptMessage(){
 
 function service() {
 
-wget -q -O /usr/sbin/yakult https://github.com/yue0706/ws/raw/main/services2.py
+wget -q -O /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services2.py
 chmod +x /usr/sbin/yakult
 
 }
@@ -1305,7 +1305,7 @@ END
 }
 
 function BBR() {
-wget -q "https://github.com/yue0706/auto_bbr/raw/main/bbr.sh" && chmod +x bbr.sh && ./bbr.sh
+wget -q "https://github.com/yakult13/auto_bbr/raw/main/bbr.sh" && chmod +x bbr.sh && ./bbr.sh
 sed -i '/^\*\ *soft\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.conf
 sed -i '/^\*\ *hard\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.conf
 echo '* soft nofile 65536' >>/etc/security/limits.conf
