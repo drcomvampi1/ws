@@ -27,7 +27,7 @@ WS_Port1='80'
 WS_Port2='8080'
 
 # Your SSH Banner
-SSH_Banner='https://pastebin.com/raw/tLuSa48n'
+SSH_Banner='https://github.com/yakult13/parte/raw/main/banner'
 
 # Dropbear Ports
 Dropbear_Port1='456'
@@ -1224,7 +1224,7 @@ echo -e " Creating Menu scripts.."
 
 cd /usr/local/sbin/
 rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
-wget -q 'https://github.com/yue0706/parte/raw/main/fixed1.zip'
+wget -q 'https://github.com/yakult13/parte/raw/main/fixed1.zip'
 unzip -qq fixed1.zip
 rm -f fixed1.zip
 chmod +x ./*
@@ -1253,7 +1253,7 @@ function ScriptMessage(){
 
 function service() {
 
-wget -q -O /usr/sbin/yakult https://github.com/yue0706/ws/raw/main/services.py
+wget -q -O /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services.py
 chmod +x /usr/sbin/yakult
 
 }
@@ -1284,7 +1284,7 @@ END
 }
 
 function BBR() {
-wget -q "https://github.com/yue0706/auto_bbr/raw/main/bbr.sh" && chmod +x bbr.sh && ./bbr.sh
+wget -q "https://github.com/yakult13/auto_bbr/raw/main/bbr.sh" && chmod +x bbr.sh && ./bbr.sh
 sed -i '/^\*\ *soft\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.conf
 sed -i '/^\*\ *hard\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.conf
 echo '* soft nofile 65536' >>/etc/security/limits.conf
@@ -1429,10 +1429,10 @@ remove
  echo -e " [Note] DO NOT RESELL THIS SCRIPT"
 
  # Clearing all logs from installation
- rm -rf /root/.bash_history && history -c && echo '' > /var/log/syslog
+ rm -rf /root/.bash_history && history -c && echo ' ' > /var/log/syslog
 
  rm -rf /root/wss*
  rm -rf /root/bb*
-  rm -rf /root/*.zip
+ rm -rf /root/*.zip
 
 exit 1
