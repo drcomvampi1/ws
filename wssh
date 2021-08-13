@@ -87,7 +87,7 @@ function  Instupdate() {
  apt-get install dropbear stunnel4 privoxy ca-certificates nginx ruby apt-transport-https lsb-release squid screenfetch -y
 
  # Installing all required packages to install Webmin
- #apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
+ apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
  apt-get install shared-mime-info jq -y
 
  # Installing a text colorizer
@@ -104,23 +104,23 @@ function  Instupdate() {
  apt-get install openvpn -y
 }
 
-#function InstWebmin(){
+function InstWebmin(){
  # Download the webmin .deb package
  # You may change its webmin version depends on the link you've loaded in this variable(.deb file only, do not load .zip or .tar.gz file):
-# WebminFile='http://prdownloads.sourceforge.net/webadmin/webmin_1.979_all.deb'
-# wget -qO webmin.deb "$WebminFile"
+ WebminFile='http://prdownloads.sourceforge.net/webadmin/webmin_1.979_all.deb'
+ wget -qO webmin.deb "$WebminFile"
  
  # Installing .deb package for webmin
-# dpkg --install webmin.deb
+ dpkg --install webmin.deb
  
-# rm -rf webmin.deb
+ rm -rf webmin.deb
 
  # Configuring webmin server config to use only http instead of https
-# sed -i 's|ssl=1|ssl=0|g' /etc/webmin/miniserv.conf
+ sed -i 's|ssl=1|ssl=0|g' /etc/webmin/miniserv.conf
 
  # Then restart to take effect
-# systemctl restart webmin
-#}
+ systemctl restart webmin
+}
 
 function InstSSH(){
  # Removing some duplicated sshd server configs
@@ -1362,8 +1362,8 @@ fi
  InsStunnel
 
  # Configure Webmin
- #echo -e "\033[0;35mConfiguring webmin...\033[0m"
- #InstWebmin
+ echo -e "\033[0;35mConfiguring webmin...\033[0m"
+ InstWebmin
 
  # Configure Privoxy and Squid
  echo -e "\033[0;35mConfiguring proxy...\033[0m"
