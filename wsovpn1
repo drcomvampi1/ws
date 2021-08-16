@@ -1322,7 +1322,6 @@ net.ipv4.ip_forward=1
 net.ipv4.tcp_rmem=65535 131072 4194304
 net.ipv4.tcp_wmem=65535 131072 194304
 net.ipv4.ip_default_ttl=50
-net.ipv4.tcp_congestion_control=bbr
 net.core.wmem_default=262144
 net.core.wmem_max=4194304
 net.core.rmem_default=262144
