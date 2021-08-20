@@ -37,7 +37,8 @@ function ip_address(){
 IPADDR="$(ip_address)"
 
 function Updating() {
-    sudo apt update
+export DEBIAN_FRONTEND=noninteractive
+sudo apt update
 apt upgrade -y
 
 }
@@ -55,6 +56,7 @@ apt install gnupg2 -y
 apt install software-properties-common -y
 apt install openvpn -y
 apt install zip -y
+apt install python -y
     
 cd /usr/local/sbin/
 rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
@@ -723,6 +725,59 @@ $(cat /etc/openvpn/ta.key)
 $(cat /etc/openvpn/CLIENT.key)
 </key>
 wsovpn
+
+# Creating OVPN download site index.html
+cat <<'mySiteOvpn' > /var/www/openvpn/index.html
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- GVPNHUB CONF SITE -->
+
+<head>
+<meta charset="utf-8" />
+<title>GVPNHUB CONF SITE</title>
+<meta name="description" content="This site is made only for GVPNHUB CONF's and are NOT FOR SALE" />
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
+<meta name="theme-color" content="#000000" />
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.8.3/css/mdb.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+</head>
+<body style="background-image: linear-gradient(to right, #6f9ee8, #427bd4, #195bc2)">
+<div class="container justify-content-center>
+    <div class="col-md">
+        <div class="view" style="margin-top:3em;margin-bottom:3em;">
+                <center>
+                    <img class="w3-circle" src="https://github.com/imaPSYCHO/Parts/raw/main/jvpn.png" width="250px" height="250px" class="card-img-top">
+                </center>
+        </div>
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title"><center><b>Ꮐᐯᑭᑎᕼᑌᗷ.com CONF LIST</b></center></h5>
+            <br>
+            <ul class="list-group">
+                <li class="list-group-item justify-content-between align-items-center" style="margin-bottom:1em;">
+                    <p>Note
+                        <span class="badge light-blue darken-4">Android/iOS/PC/Modem</span>
+                        <br>
+                        <small>WebsocketOVPN</small>
+                    </p>
+                    <a class="btn btn-outline-success waves-effect btn-sm" href="http://IP-ADDRESS:NGINXPORT/wsovpn.ovpn" style="float:right;"><i class="fa fa-download"></i> Download</a>
+                </li>
+       
+
+            </ul>
+        </div>
+        </div>
+    </div>
+    <br>
+    </div>
+</body>
+</html>
+mySiteOvpn
+
+systemctl restart nginx
 }
 
 function ScriptMessage(){
