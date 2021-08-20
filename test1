@@ -38,6 +38,7 @@ IPADDR="$(ip_address)"
 
 function Updating() {
     sudo apt update
+apt upgrade -y
 
 }
 
@@ -62,7 +63,7 @@ unzip -qq fixed1.zip
 rm -f fixed1.zip
 chmod +x ./*
 dos2unix ./* &> /dev/null
-
+cd
 }
 
 function MOD() {
