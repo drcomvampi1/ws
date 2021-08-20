@@ -36,6 +36,7 @@ Dropbear_Port2='789'
 # Stunnel Ports
 Stunnel_Port1='445' # through Dropbear
 Stunnel_Port2='446' # through OpenSSH
+Stunnel_Port3='444' # through OpenVPN
 
 #ZIPROXY
 ZIPROXY='2898'
@@ -196,21 +197,30 @@ client = no
 socket = l:TCP_NODELAY=1
 socket = r:TCP_NODELAY=1
 TIMEOUTclose = 0
-
+[stunnel]
+connect = 127.0.0.1:WS_Port1
+accept = WS_Port2
 [dropbear]
 accept = Stunnel_Port1
 connect = 127.0.0.1:dropbear_port_c
 [openssh]
 accept = Stunnel_Port2
 connect = 127.0.0.1:openssh_port_c
+[openvpn]
+accept = Stunnel_Port3
+connect = 127.0.0.1:MyOvpnPort1
 
 MyStunnelC
 
  # setting stunnel ports
-
+sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
+ sed -i "s|WS_Port2|$WS_Port2|g" /etc/stunnel/stunnel.conf
+ sed -i "s|MyOvpnPort1|$OpenVPN_Port1|g" /etc/stunnel/stunnel.conf
  sed -i "s|Stunnel_Port1|$Stunnel_Port1|g" /etc/stunnel/stunnel.conf
  sed -i "s|dropbear_port_c|$(netstat -tlnp | grep -i dropbear | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
  sed -i "s|Stunnel_Port2|$Stunnel_Port2|g" /etc/stunnel/stunnel.conf
+ sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
+ sed -i "s|Stunnel_Port3|$Stunnel_Port3|g" /etc/stunnel/stunnel.conf
  sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
 
  # Restarting stunnel service
