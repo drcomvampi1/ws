@@ -43,10 +43,16 @@ function Updating() {
 
 function Installing() {
 
-    sudo apt install openssh-server
+    sudo apt install openssh-server -y
     sudo ufw allow ssh
-    sudo systemctl start ssh
-    apt install nginx ca-certificates apt-transport-https curl gnupg2 software-properties-common openvpn -y
+    sudo systemctl start ssh -y
+    apt install nginx -y
+    apt install ca-certificates -y
+apt install apt-transport-https -y
+apt install curl -y
+apt install gnupg2 -y
+apt install software-properties-common -y
+apt install openvpn -y
     
 cd /usr/local/sbin/
 rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
