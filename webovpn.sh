@@ -28,7 +28,7 @@ Purple='\033[0;35m'       # Purple
 Cyan='\033[0;36m'         # Cyan
 
 
-function ip_address() {
+function ip_address(){
   local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
   [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipv4.icanhazip.com )"
   [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipinfo.io/ip )"
@@ -40,13 +40,25 @@ function Updating() {
 export DEBIAN_FRONTEND=noninteractive
 sudo apt update
 apt upgrade -y
+
 }
 
 function Installing() {
-sudo apt install openssh-server
-apt-get install zip ca-certificates nginx ruby apt-transport-https lsb-release curl gnupg2 software-properties-common -y
-apt-get autoremove -y
 
+apt install openssh-server -y
+ufw allow ssh
+systemctl start ssh
+apt install nginx -y
+apt install ca-certificates -y
+apt install apt-transport-https -y
+apt install curl -y
+apt install gnupg2 -y
+apt install software-properties-common -y
+apt install openvpn -y
+apt install zip -y
+apt install python -y
+apt-get autoremove -y
+    
 cd /usr/local/sbin/
 rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
 wget -q 'https://github.com/yakult13/parte/raw/main/fixed1.zip'
@@ -64,17 +76,29 @@ function MOD() {
 
  # Creating a SSH server config using cat eof tricks
  cat <<'MySSHConfig' > /etc/ssh/sshd_config
+# My OpenSSH Server config
 Port 22
+Port 225
+AddressFamily inet
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
 PermitRootLogin yes
-PubkeyAuthentication no
+MaxSessions 1024
+PubkeyAuthentication yes
 PasswordAuthentication yes
+PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 UsePAM yes
 X11Forwarding yes
 PrintMotd no
+ClientAliveInterval 240
+ClientAliveCountMax 2
+UseDNS no
+Banner /etc/banner
 AcceptEnv LANG LC_*
-Subsystem sftp  /usr/lib/openssh/sftp-server
-ClientAliveInterval 120
+Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
 systemctl restart ssh
@@ -83,278 +107,8 @@ systemctl restart ssh
 
 function service() {
 
-# cREATING PROXY
-cat <<'PROXY' > /usr/sbin/yakult
-#!/usr/bin/python
-import socket, threading, thread, select, signal, sys, time, getopt
-
-# Listen
-LISTENING_ADDR = '0.0.0.0'
-if sys.argv[1:]:
-  LISTENING_PORT = sys.argv[1]
-else:
-  LISTENING_PORT = 80
-
-# Pass
-PASS = ''
-
-# CONST
-BUFLEN = 4096 * 4
-TIMEOUT = 3600
-DEFAULT_HOST = '127.0.0.1:112'
-RESPONSE = 'HTTP/1.1 101 <font color="red">GVPNHUB.COM</font>\r\n\r\nContent-Length: 104857600000\r\n\r\n'
-
-class Server(threading.Thread):
-    def __init__(self, host, port):
-        threading.Thread.__init__(self)
-        self.running = False
-        self.host = host
-        self.port = port
-        self.threads = []
-        self.threadsLock = threading.Lock()
-        self.logLock = threading.Lock()
-
-    def run(self):
-        self.soc = socket.socket(socket.AF_INET)
-        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.soc.settimeout(2)
-        intport = int(self.port)
-        self.soc.bind((self.host, intport))
-        self.soc.listen(0)
-        self.running = True
-
-        try:
-            while self.running:
-                try:
-                    c, addr = self.soc.accept()
-                    c.setblocking(1)
-                except socket.timeout:
-                    continue
-
-                conn = ConnectionHandler(c, self, addr)
-                conn.start()
-                self.addConn(conn)
-        finally:
-            self.running = False
-            self.soc.close()
-
-    def printLog(self, log):
-        self.logLock.acquire()
-        print log
-        self.logLock.release()
-
-    def addConn(self, conn):
-        try:
-            self.threadsLock.acquire()
-            if self.running:
-                self.threads.append(conn)
-        finally:
-            self.threadsLock.release()
-
-    def removeConn(self, conn):
-        try:
-            self.threadsLock.acquire()
-            self.threads.remove(conn)
-        finally:
-            self.threadsLock.release()
-
-    def close(self):
-        try:
-            self.running = False
-            self.threadsLock.acquire()
-
-            threads = list(self.threads)
-            for c in threads:
-                c.close()
-        finally:
-            self.threadsLock.release()
-
-
-class ConnectionHandler(threading.Thread):
-    def __init__(self, socClient, server, addr):
-        threading.Thread.__init__(self)
-        self.clientClosed = False
-        self.targetClosed = True
-        self.client = socClient
-        self.client_buffer = ''
-        self.server = server
-        self.log = 'Connection: ' + str(addr)
-
-    def close(self):
-        try:
-            if not self.clientClosed:
-                self.client.shutdown(socket.SHUT_RDWR)
-                self.client.close()
-        except:
-            pass
-        finally:
-            self.clientClosed = True
-
-        try:
-            if not self.targetClosed:
-                self.target.shutdown(socket.SHUT_RDWR)
-                self.target.close()
-        except:
-            pass
-        finally:
-            self.targetClosed = True
-
-    def run(self):
-        try:
-            self.client_buffer = self.client.recv(BUFLEN)
-
-            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
-
-            if hostPort == '':
-                hostPort = DEFAULT_HOST
-
-            split = self.findHeader(self.client_buffer, 'X-Split')
-
-            if split != '':
-                self.client.recv(BUFLEN)
-
-            if hostPort != '':
-                passwd = self.findHeader(self.client_buffer, 'X-Pass')
-				
-                if len(PASS) != 0 and passwd == PASS:
-                    self.method_CONNECT(hostPort)
-                elif len(PASS) != 0 and passwd != PASS:
-                    self.client.send('HTTP/1.1 400 WrongPass!\r\n\r\n')
-                elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
-                    self.method_CONNECT(hostPort)
-                else:
-                    self.client.send('HTTP/1.1 403 Forbidden!\r\n\r\n')
-            else:
-                print '- No X-Real-Host!'
-                self.client.send('HTTP/1.1 400 NoXRealHost!\r\n\r\n')
-
-        except Exception as e:
-            self.log += ' - error: ' + e.strerror
-            self.server.printLog(self.log)
-	    pass
-        finally:
-            self.close()
-            self.server.removeConn(self)
-
-    def findHeader(self, head, header):
-        aux = head.find(header + ': ')
-
-        if aux == -1:
-            return ''
-
-        aux = head.find(':', aux)
-        head = head[aux+2:]
-        aux = head.find('\r\n')
-
-        if aux == -1:
-            return ''
-
-        return head[:aux];
-
-    def connect_target(self, host):
-        i = host.find(':')
-        if i != -1:
-            port = int(host[i+1:])
-            host = host[:i]
-        else:
-            if self.method=='CONNECT':
-                port = 443
-            else:
-                port = sys.argv[1]
-
-        (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
-
-        self.target = socket.socket(soc_family, soc_type, proto)
-        self.targetClosed = False
-        self.target.connect(address)
-
-    def method_CONNECT(self, path):
-        self.log += ' - CONNECT ' + path
-
-        self.connect_target(path)
-        self.client.sendall(RESPONSE)
-        self.client_buffer = ''
-
-        self.server.printLog(self.log)
-        self.doCONNECT()
-
-    def doCONNECT(self):
-        socs = [self.client, self.target]
-        count = 0
-        error = False
-        while True:
-            count += 1
-            (recv, _, err) = select.select(socs, [], socs, 3)
-            if err:
-                error = True
-            if recv:
-                for in_ in recv:
-		    try:
-                        data = in_.recv(BUFLEN)
-                        if data:
-			    if in_ is self.target:
-				self.client.send(data)
-                            else:
-                                while data:
-                                    byte = self.target.send(data)
-                                    data = data[byte:]
-
-                            count = 0
-			else:
-			    break
-		    except:
-                        error = True
-                        break
-            if count == TIMEOUT:
-                error = True
-            if error:
-                break
-
-
-def print_usage():
-    print 'Usage: proxy.py -p <port>'
-    print '       proxy.py -b <bindAddr> -p <port>'
-    print '       proxy.py -b 0.0.0.0 -p 80'
-
-def parse_args(argv):
-    global LISTENING_ADDR
-    global LISTENING_PORT
-    
-    try:
-        opts, args = getopt.getopt(argv,"hb:p:",["bind=","port="])
-    except getopt.GetoptError:
-        print_usage()
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print_usage()
-            sys.exit()
-        elif opt in ("-b", "--bind"):
-            LISTENING_ADDR = arg
-        elif opt in ("-p", "--port"):
-            LISTENING_PORT = int(arg)
-
-
-def main(host=LISTENING_ADDR, port=LISTENING_PORT):
-    print "\n:-------PythonProxy-------:\n"
-    print "Listening addr: " + LISTENING_ADDR
-    print "Listening port: " + str(LISTENING_PORT) + "\n"
-    print ":-------------------------:\n"
-    server = Server(LISTENING_ADDR, LISTENING_PORT)
-    server.start()
-    while True:
-        try:
-            time.sleep(2)
-        except KeyboardInterrupt:
-            print 'Stopping...'
-            server.close()
-            break
-
-#######    parse_args(sys.argv[1:])
-if __name__ == '__main__':
-    main()
-
-PROXY
+wget -qO /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services2.py
+chmod +x /usr/sbin/yakult
 
 }
 
@@ -380,7 +134,6 @@ Restart=on-failure
 WantedBy=multi-user.target
 END
 
-
 systemctl daemon-reload
 systemctl enable yakult
 systemctl restart yakult
@@ -388,9 +141,6 @@ systemctl restart yakult
 }
     
 function InsOpenVPN() {
-apt install openvpn -y
-opam=`find /usr -name openvpn*auth-pam.so`
-
  # Checking if openvpn folder is accidentally deleted or purged
  if [[ ! -e /etc/openvpn ]]; then
   mkdir -p /etc/openvpn
@@ -402,7 +152,7 @@ opam=`find /usr -name openvpn*auth-pam.so`
  # Creating server.conf, ca.crt, server.crt and server.key
  cat <<'myOpenVPNconf1' > /etc/openvpn/server_tcp.conf
 # GVPNHUB
-port 1194
+port 112
 proto tcp
 dev tun
 topology subnet
@@ -416,7 +166,7 @@ tls-cipher TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256
 ncp-disable
 username-as-common-name
 verify-client-cert none
-plugin $opam login
+plugin /etc/openvpn/openvpn-auth-pam.so /etc/pam.d/login
 script-security 2
 auth none
 cipher none
@@ -434,7 +184,6 @@ persist-key
 persist-tun
 log-append log/openvpn.log
 verb 3
-
 myOpenVPNconf1
 
  
@@ -611,7 +360,17 @@ FPFq6nTFawZekRJycKDCTCXDXUaCpIXbAw==
 -----END CERTIFICATE-----
 EOF31
 
-cat << 'iptabc' > /usr/sbin/iptab
+ # Getting some OpenVPN plugins for unix authentication
+ wget -qO /etc/openvpn/b.zip 'https://github.com/imaPSYCHO/Parts/raw/main/openvpn_plugin64'
+ unzip -qq /etc/openvpn/b.zip -d /etc/openvpn
+ rm -f /etc/openvpn/b.zip
+
+ systemctl daemon-reload
+ systemctl start openvpn@server_tcp
+ systemctl enable openvpn@server_tcp
+ systemctl restart openvpn@server_tcp
+
+cat << 'iptabc' > /sbin/iptab
 #!/bin/bash
 INET="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)"
 iptables -F
@@ -632,17 +391,14 @@ iptables -A INPUT -p tcp -m state --state NEW,ESTABLISHED --dport 22 -j ACCEPT
 iptables -t filter -A FORWARD -j REJECT --reject-with icmp-port-unreachable
 iptabc
 
-chmod +x /usr/sbin/iptab
+chmod a+x /sbin/iptab
 
- systemctl daemon-reload
  systemctl start openvpn@server_tcp
  systemctl enable openvpn@server_tcp
  systemctl restart openvpn@server_tcp
 
  
  # Creating nginx config for our ovpn config downloads webserver
- rm -rf /etc/nginx/sites-*
-
  cat <<'myNginxC' > /etc/nginx/conf.d/bonveio-ovpn-config.conf
 # My OpenVPN Config Download Directory
 server {
@@ -652,7 +408,6 @@ server {
  index index.html;
 }
 myNginxC
-
 
 cat << sysctl > /etc/sysctl.d/bbr.conf
 net.ipv4.ip_forward=1
@@ -753,13 +508,13 @@ cat <<'mySiteOvpn' > /var/www/openvpn/index.html
 </html>
 mySiteOvpn
 
-
- # Setting template's correct name,IP address and nginx Port
+# Setting template's correct name,IP address and nginx Port
  sed -i "s|MyScriptName|$MyScriptName|g" /var/www/openvpn/index.html
  sed -i "s|NGINXPORT|$OvpnDownload_Port|g" /var/www/openvpn/index.html
  sed -i "s|IP-ADDRESS|$IPADDR|g" /var/www/openvpn/index.html
 
-systemctl restart nginx
+ systemctl restart nginx
+
 }
 
 function ScriptMessage(){
