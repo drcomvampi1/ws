@@ -44,9 +44,17 @@ ZIPROXY='2898'
 Proxy_Port1='6464'
 Proxy_Port2='6565'
 
+# OpenVPN Ports
+OpenVPN_Port1='112'
+OpenVPN_Port2='443'
+OpenVPN_Port3='1194'
+OpenVPN_Port4='25888' # take note when you change this port, openvpn sun noload config will not work
+
 # Privoxy Ports (must be 1024 or higher)
 Privoxy_Port1='8686'
 Privoxy_Port2='8787'
+# OpenVPN Config Download Port
+OvpnDownload_Port='1998' # Before changing this value, please read this document. It contains all unsafe ports for Google Chrome Browser, please read from line #23 to line #89: https://chromium.googlesource.com/chromium/src.git/+/refs/heads/master/net/base/port_util.cc
 
 # Server local time
 MyVPS_Time='Asia/Manila'
@@ -76,7 +84,7 @@ function  Instupdate() {
  apt-get install nano wget curl zip unzip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
 
  # Now installing all our wanted services
- apt-get install dropbear stunnel4 privoxy ca-certificates nginx ruby apt-transport-https lsb-release squid screenfetch -y
+ apt-get install dropbear stunnel4 privoxy ca-certificates ruby apt-transport-https lsb-release squid screenfetch -y
 
  # Installing all required packages to install Webmin
  apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
@@ -87,9 +95,11 @@ function  Instupdate() {
 
  # Trying to remove obsolette packages after installation
  apt-get autoremove -y
+
 }
 
-function InstSSH(){
+
+function InstSSH() {
  # Removing some duplicated sshd server configs
  rm -f /etc/ssh/sshd_config*
 
@@ -209,11 +219,10 @@ connect = 127.0.0.1:openssh_port_c
 [openvpn]
 accept = Stunnel_Port3
 connect = 127.0.0.1:MyOvpnPort1
-
 MyStunnelC
 
  # setting stunnel ports
-sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
+ sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
  sed -i "s|WS_Port2|$WS_Port2|g" /etc/stunnel/stunnel.conf
  sed -i "s|MyOvpnPort1|$OpenVPN_Port1|g" /etc/stunnel/stunnel.conf
  sed -i "s|Stunnel_Port1|$Stunnel_Port1|g" /etc/stunnel/stunnel.conf
@@ -228,8 +237,31 @@ sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
 
 }
 
+function InsOpenVPN(){
 
-function InsProxy(){
+ # Installing Firewalld
+ apt install firewalld -y
+ systemctl start firewalld
+ systemctl enable firewalld
+ firewall-cmd --quiet --set-default-zone=public
+ firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/tcp
+ firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/udp
+ firewall-cmd --quiet --reload
+ firewall-cmd --quiet --add-masquerade
+ firewall-cmd --quiet --permanent --add-masquerade
+ firewall-cmd --quiet --permanent --add-service=ssh
+ firewall-cmd --quiet --permanent --add-service=http
+ firewall-cmd --quiet --permanent --add-service=https
+ firewall-cmd --quiet --permanent --add-service=privoxy
+ firewall-cmd --quiet --permanent --add-service=squid
+ firewall-cmd --quiet --reload
+
+ # Enabling IPv4 Forwarding
+ echo 1 > /proc/sys/net/ipv4/ip_forward
+
+}
+
+function InsProxy() {
  # Removing Duplicate privoxy config
  rm -rf /etc/privoxy/config*
 
@@ -307,6 +339,7 @@ myziproxy
  systemctl restart ziproxy
 }
 
+
 function ip_address(){
   local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
   [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipv4.icanhazip.com )"
@@ -343,14 +376,10 @@ function ConfStartup(){
 # Setting server local time
 ln -fs /usr/share/zoneinfo/MyVPS_Time /etc/localtime
 
-# Prevent DOS-like UI when installing using APT (Disabling APT interactive dialog)
-export DEBIAN_FRONTEND=noninteractive
-
 # Allowing ALL TCP ports for our machine (Simple workaround for policy-based VPS)
 iptables -A INPUT -s $(wget -4qO- http://ipinfo.io/ip) -p tcp -m multiport --dport 1:65535 -j ACCEPT
 
-# Deleting Expired SSH Accounts
-/usr/local/sbin/delete_expired &> /dev/null
+
 EOFSH
  chmod +x /etc/juans/startup.sh
 
@@ -503,7 +532,6 @@ echo ' ' > /var/log/syslog
 rm -f *
 }
 
-
  # Begin Installation by Updating and Upgrading machine and then Installing all our wanted packages/services to be install.
  ScriptMessage
  sleep 2
@@ -523,7 +551,9 @@ rm -f *
  echo -e "\033[0;35mConfiguring proxy...\033[0m"
  InsProxy
 
-
+ # Configure OpenVPN
+ echo -e "\033[0;35mConfiguring OpenVPN...\033[0m"
+ InsOpenVPN
 
  # Some assistance and startup scripts
  ConfStartup
@@ -564,8 +594,8 @@ remove
  echo -e " Privoxy: $Privoxy_Port1, $Privoxy_Port2"
  echo -e " Squid: $Proxy_Port1, $Proxy_Port2"
  echo -e " Auto-Recon: $ZIPROXY"
- echo -e " NGiNX: $OvpnDownload_Port"
- #echo -e " Webmin: 10000"
+ echo -e " TCP: $OpenVPN_Port1, $OpenVPN_Port2"
+ echo -e " UDP: $OpenVPN_Port3, $OpenVPN_Port4"
  echo -e " Server Reset: 3AM PH Time"
  echo -e ""
  echo -e " [Note] DO NOT RESELL THIS SCRIPT"
