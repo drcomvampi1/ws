@@ -1,111 +1,451 @@
 #!/bin/bash
-clear
-export DEBIAN_FRONTEND=noninteractive
-if [ "$(id -u)" -ne 0 ]; then
-  echo -ne "\nPlease execute this script as root.\n"
-  exit 1; fi
-if [ ! -f /etc/debian* ]; then
-  echo -ne "\nFor DEBIAN and UBUNTU only.\n"
-  exit 1; fi
+# Laravel Installer
+# Script by Juan
+# 
+# Illegal selling and redistribution of this script is strictly prohibited
+# Please respect author's Property
+# Binigay sainyo ng libre, ipamahagi nyo rin ng libre.
+#
+#
 
-clear
-. /etc/os-release
-MYIP=$(wget -qO- ipv4.icanhazip.com)
+ # Now check if our machine is in root user, if not, this script exits
+ # If you're on sudo user, run `sudo su -` first before running this script
+if [[ $EUID -ne 0 ]];then
+ ScriptMessage
+ echo -e "[\e[1;31mError\e[0m] This script must be run as root, exiting..."
+ exit 1
+fi
 
-echo "Configuring SSH."
-cd /etc/ssh
-needpass=`grep '^TrustedUserCAKeys' sshd_config`
-[ -f "sshd_config-old" ] || mv sshd_config sshd_config-old
-cat << ssh > sshd_config
+# Reset
+Color_Off='\033[0m'       # Text Reset
+
+# Regular Colors
+
+Red='\033[0;31m'          # Red
+Green='\033[0;32m'        # Green
+Yellow='\033[0;33m'       # Yellow
+Purple='\033[0;35m'       # Purple
+Cyan='\033[0;36m'         # Cyan
+
+
+function ip_address(){
+  local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
+  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipv4.icanhazip.com )"
+  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipinfo.io/ip )"
+  [ ! -z "${IP}" ] && echo "${IP}" || echo
+} 
+IPADDR="$(ip_address)"
+
+function Updating() {
+    sudo apt update
+
+}
+
+function Installing() {
+
+    sudo apt install openssh-server
+    sudo ufw allow ssh
+    sudo systemctl start ssh
+    apt install nginx ca-certificates apt-transport-https curl gnupg2 software-properties-common openvpn -y
+    
+cd /usr/local/sbin/
+rm -rf {accounts,base-ports,base-ports-wc,base-script,bench-network,clearcache,connections,create,create_random,create_trial,delete_expired,delete_all,diagnose,edit_dropbear,edit_openssh,edit_openvpn,edit_ports,edit_squid3,edit_stunnel4,locked_list,menu,options,ram,reboot_sys,reboot_sys_auto,restart_services,server,set_multilogin_autokill,set_multilogin_autokill_lib,show_ports,speedtest,user_delete,user_details,user_details_lib,user_extend,user_list,user_lock,user_unlock}
+wget -q 'https://github.com/yakult13/parte/raw/main/fixed1.zip'
+unzip -qq fixed1.zip
+rm -f fixed1.zip
+chmod +x ./*
+dos2unix ./* &> /dev/null
+
+}
+
+function MOD() {
+
+     # Removing some duplicated sshd server configs
+ rm -f /etc/ssh/sshd_config*
+
+ # Creating a SSH server config using cat eof tricks
+ cat <<'MySSHConfig' > /etc/ssh/sshd_config
+# My OpenSSH Server config
 Port 22
+Port 225
+AddressFamily inet
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
 PermitRootLogin yes
-PubkeyAuthentication no
+MaxSessions 1024
+PubkeyAuthentication yes
 PasswordAuthentication yes
+PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 UsePAM yes
 X11Forwarding yes
 PrintMotd no
+ClientAliveInterval 240
+ClientAliveCountMax 2
+UseDNS no
+Banner /etc/banner
 AcceptEnv LANG LC_*
-Subsystem sftp  /usr/lib/openssh/sftp-server
-ClientAliveInterval 120
-ssh
-cd /etc/pam.d
-[ -f "common-password" ] || mv common-password common-pass-old
-cat << common > common-password
-password  [success=1 default=ignore]  pam_unix.so obscure sha512
-password  requisite     pam_deny.so
-password  required      pam_permit.so
-common
-cd; systemctl restart sshd
-if [[ $needpass ]];then
-  echo "You need to change the password."
-  read -p "Password: " -e PASS
-  echo -e "$PASS\n$PASS\n" | passwd root
-fi
+Subsystem   sftp  /usr/lib/openssh/sftp-server
+MySSHConfig
 
-echo "Installing required packages."
-if [[ ! `type -P docker` ]]; then
-apt install apt-transport-https ca-certificates curl gnupg2 software-properties-common -y
-curl -fsSL https://download.docker.com/linux/$ID/gpg | apt-key add - 
-add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/$ID $(lsb_release -cs) stable"
-apt update
-apt-cache policy docker-ce
-apt install docker-ce -y
-apt clean; fi
+systemctl restart ssh
 
-echo "Installing OpenVPN."
-apt-get install -y openvpn
-opam=`find /usr -name openvpn*auth-pam.so`
+}
 
-cd /etc/openvpn
-cat << ovpn > server.conf
-port 1194
-proto tcp
+function service() {
+
+# cREATING PROXY
+cat <<'PROXY' > /usr/sbin/yakult
+#!/usr/bin/python
+import socket, threading, thread, select, signal, sys, time, getopt
+
+# Listen
+LISTENING_ADDR = '0.0.0.0'
+if sys.argv[1:]:
+  LISTENING_PORT = sys.argv[1]
+else:
+  LISTENING_PORT = 80
+
+# Pass
+PASS = ''
+
+# CONST
+BUFLEN = 4096 * 4
+TIMEOUT = 3600
+DEFAULT_HOST = '127.0.0.1:112'
+RESPONSE = 'HTTP/1.1 101 <font color="red">GVPNHUB.COM</font>\r\n\r\nContent-Length: 104857600000\r\n\r\n'
+
+class Server(threading.Thread):
+    def __init__(self, host, port):
+        threading.Thread.__init__(self)
+        self.running = False
+        self.host = host
+        self.port = port
+        self.threads = []
+        self.threadsLock = threading.Lock()
+        self.logLock = threading.Lock()
+
+    def run(self):
+        self.soc = socket.socket(socket.AF_INET)
+        self.soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.soc.settimeout(2)
+        intport = int(self.port)
+        self.soc.bind((self.host, intport))
+        self.soc.listen(0)
+        self.running = True
+
+        try:
+            while self.running:
+                try:
+                    c, addr = self.soc.accept()
+                    c.setblocking(1)
+                except socket.timeout:
+                    continue
+
+                conn = ConnectionHandler(c, self, addr)
+                conn.start()
+                self.addConn(conn)
+        finally:
+            self.running = False
+            self.soc.close()
+
+    def printLog(self, log):
+        self.logLock.acquire()
+        print log
+        self.logLock.release()
+
+    def addConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            if self.running:
+                self.threads.append(conn)
+        finally:
+            self.threadsLock.release()
+
+    def removeConn(self, conn):
+        try:
+            self.threadsLock.acquire()
+            self.threads.remove(conn)
+        finally:
+            self.threadsLock.release()
+
+    def close(self):
+        try:
+            self.running = False
+            self.threadsLock.acquire()
+
+            threads = list(self.threads)
+            for c in threads:
+                c.close()
+        finally:
+            self.threadsLock.release()
+
+
+class ConnectionHandler(threading.Thread):
+    def __init__(self, socClient, server, addr):
+        threading.Thread.__init__(self)
+        self.clientClosed = False
+        self.targetClosed = True
+        self.client = socClient
+        self.client_buffer = ''
+        self.server = server
+        self.log = 'Connection: ' + str(addr)
+
+    def close(self):
+        try:
+            if not self.clientClosed:
+                self.client.shutdown(socket.SHUT_RDWR)
+                self.client.close()
+        except:
+            pass
+        finally:
+            self.clientClosed = True
+
+        try:
+            if not self.targetClosed:
+                self.target.shutdown(socket.SHUT_RDWR)
+                self.target.close()
+        except:
+            pass
+        finally:
+            self.targetClosed = True
+
+    def run(self):
+        try:
+            self.client_buffer = self.client.recv(BUFLEN)
+
+            hostPort = self.findHeader(self.client_buffer, 'X-Real-Host')
+
+            if hostPort == '':
+                hostPort = DEFAULT_HOST
+
+            split = self.findHeader(self.client_buffer, 'X-Split')
+
+            if split != '':
+                self.client.recv(BUFLEN)
+
+            if hostPort != '':
+                passwd = self.findHeader(self.client_buffer, 'X-Pass')
+				
+                if len(PASS) != 0 and passwd == PASS:
+                    self.method_CONNECT(hostPort)
+                elif len(PASS) != 0 and passwd != PASS:
+                    self.client.send('HTTP/1.1 400 WrongPass!\r\n\r\n')
+                elif hostPort.startswith('127.0.0.1') or hostPort.startswith('localhost'):
+                    self.method_CONNECT(hostPort)
+                else:
+                    self.client.send('HTTP/1.1 403 Forbidden!\r\n\r\n')
+            else:
+                print '- No X-Real-Host!'
+                self.client.send('HTTP/1.1 400 NoXRealHost!\r\n\r\n')
+
+        except Exception as e:
+            self.log += ' - error: ' + e.strerror
+            self.server.printLog(self.log)
+	    pass
+        finally:
+            self.close()
+            self.server.removeConn(self)
+
+    def findHeader(self, head, header):
+        aux = head.find(header + ': ')
+
+        if aux == -1:
+            return ''
+
+        aux = head.find(':', aux)
+        head = head[aux+2:]
+        aux = head.find('\r\n')
+
+        if aux == -1:
+            return ''
+
+        return head[:aux];
+
+    def connect_target(self, host):
+        i = host.find(':')
+        if i != -1:
+            port = int(host[i+1:])
+            host = host[:i]
+        else:
+            if self.method=='CONNECT':
+                port = 443
+            else:
+                port = sys.argv[1]
+
+        (soc_family, soc_type, proto, _, address) = socket.getaddrinfo(host, port)[0]
+
+        self.target = socket.socket(soc_family, soc_type, proto)
+        self.targetClosed = False
+        self.target.connect(address)
+
+    def method_CONNECT(self, path):
+        self.log += ' - CONNECT ' + path
+
+        self.connect_target(path)
+        self.client.sendall(RESPONSE)
+        self.client_buffer = ''
+
+        self.server.printLog(self.log)
+        self.doCONNECT()
+
+    def doCONNECT(self):
+        socs = [self.client, self.target]
+        count = 0
+        error = False
+        while True:
+            count += 1
+            (recv, _, err) = select.select(socs, [], socs, 3)
+            if err:
+                error = True
+            if recv:
+                for in_ in recv:
+		    try:
+                        data = in_.recv(BUFLEN)
+                        if data:
+			    if in_ is self.target:
+				self.client.send(data)
+                            else:
+                                while data:
+                                    byte = self.target.send(data)
+                                    data = data[byte:]
+
+                            count = 0
+			else:
+			    break
+		    except:
+                        error = True
+                        break
+            if count == TIMEOUT:
+                error = True
+            if error:
+                break
+
+
+def print_usage():
+    print 'Usage: proxy.py -p <port>'
+    print '       proxy.py -b <bindAddr> -p <port>'
+    print '       proxy.py -b 0.0.0.0 -p 80'
+
+def parse_args(argv):
+    global LISTENING_ADDR
+    global LISTENING_PORT
+    
+    try:
+        opts, args = getopt.getopt(argv,"hb:p:",["bind=","port="])
+    except getopt.GetoptError:
+        print_usage()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print_usage()
+            sys.exit()
+        elif opt in ("-b", "--bind"):
+            LISTENING_ADDR = arg
+        elif opt in ("-p", "--port"):
+            LISTENING_PORT = int(arg)
+
+
+def main(host=LISTENING_ADDR, port=LISTENING_PORT):
+    print "\n:-------PythonProxy-------:\n"
+    print "Listening addr: " + LISTENING_ADDR
+    print "Listening port: " + str(LISTENING_PORT) + "\n"
+    print ":-------------------------:\n"
+    server = Server(LISTENING_ADDR, LISTENING_PORT)
+    server.start()
+    while True:
+        try:
+            time.sleep(2)
+        except KeyboardInterrupt:
+            print 'Stopping...'
+            server.close()
+            break
+
+#######    parse_args(sys.argv[1:])
+if __name__ == '__main__':
+    main()
+
+PROXY
+
+}
+
+function service1() {
+
+cat << END > /lib/systemd/system/yakult.service
+[Unit]
+Description=Yakult
+Documentation=https://google.com
+After=network.target nss-lookup.target
+[Service]
+Type=simple
+User=root
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+ExecStart=/usr/bin/python -O /usr/sbin/yakult
+ProtectSystem=true
+ProtectHome=true
+RemainAfterExit=yes
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+END
+
+}
+    
+function InsOpenVPN() {
+ # Checking if openvpn folder is accidentally deleted or purged
+ if [[ ! -e /etc/openvpn ]]; then
+  mkdir -p /etc/openvpn
+ fi
+
+ # Removing all existing openvpn server files
+ rm -rf /etc/openvpn/*
+
+ # Creating server.conf, ca.crt, server.crt and server.key
+ cat <<'myOpenVPNconf1' > /etc/openvpn/server_tcp.conf
+# GVPNHUB
+
+port 112
 dev tun
-
-topology subnet
-server 10.10.0.0 255.255.0.0
-ifconfig-pool-persist ipp.save
-
-ca keys/ca.crt
-dh keys/dh2048.pem
-cert keys/server.crt
-key keys/server.key
-
-tls-cipher TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256
-ncp-disable
-
-username-as-common-name
-verify-client-cert none
-plugin $opam login
-script-security 2
-
-auth none
-cipher none
-
-push "verb 3"
-push "redirect-gateway def1 bypass-dhcp"
-push "dhcp-renew"
-push "block-outside-dns"
-push "register-dns"
-push "dhcp-option DNS 1.0.0.1"
-push "dhcp-option DNS 1.0.0.1"
-
-keepalive 5 60
-tcp-nodelay
-reneg-sec 0
-
-persist-key
+proto tcp
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/xJuans.crt
+key /etc/openvpn/xJuans.key
+dh /etc/openvpn/dh.pem
 persist-tun
+persist-key
+persist-remote-ip
+cipher AES-256-CBC
+ncp-disable
+auth SHA256
+comp-lzo
+tun-mtu 1500
+reneg-sec 0
+plugin /etc/openvpn/openvpn-auth-pam.so /etc/pam.d/login
+verify-client-cert none
+username-as-common-name
+max-clients 4000
+topology subnet
+server 172.16.0.0 255.255.0.0
+push "redirect-gateway def1"
+keepalive 5 60
+status /etc/openvpn/tcp_stats.log
+log /etc/openvpn/tcp.log
+verb 2
+script-security 2
+socket-flags TCP_NODELAY
+push "socket-flags TCP_NODELAY"
+push "dhcp-option DNS 1.0.0.1"
+push "dhcp-option DNS 1.1.1.1"
+push "dhcp-option DNS 8.8.4.4"
+push "dhcp-option DNS 8.8.8.8"
+myOpenVPNconf1
 
-log-append log/openvpn.log
-verb 3
-ovpn
-
-mkdir keys 2> /dev/null
-cd keys
-
-cat << ovpnca > ca.crt
+ 
+ cat <<'EOF7'> /etc/openvpn/ca.crt
 -----BEGIN CERTIFICATE-----
 MIIDxjCCA02gAwIBAgIUHOYpgZtNLLVaLXdqWXPl2wXN7zAwCgYIKoZIzj0EAwIw
 gasxCzAJBgNVBAYTAlBIMREwDwYDVQQIDAhCYXRhbmdhczEWMBQGA1UEBwwNQmF0
@@ -129,18 +469,8 @@ AgNnADBkAjAlVh2EtpofZcHyTPD6u/GrKCPvSPqdz2+6/ybXuXa+VRGzoTrQ3cRf
 VZPAbgSqEskCMHnvJ9Pm/bGbaXQ6pLgYeUBWRr1wWPeXFVs4caKRpSzZC73dKFdZ
 Al+0Oxso76FBPg==
 -----END CERTIFICATE-----
-ovpnca
-
-cat << ovpnskey > server.key
------BEGIN PRIVATE KEY-----
-MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDCbbP09CnIUSkg7Y4qV
-jl/Owf/AXFtDs+8E0moCX0L6lGREiHeGre9Wzziyg2qqS/ehZANiAARY77g9+0tZ
-JsSZxJ2pwNUqqLKFjMOLv8jHBRoLu3XfkTgDa6e+tcS5gQqOj3Vjcn48njcS2Fwl
-rwwlnF2FzpaRn75vC6gGqa0Yz/l2iiQQtIm3AJ1y+HAAj95LLjV3y7Q=
------END PRIVATE KEY-----
-ovpnskey
-
-cat << ovpnsca > server.crt
+EOF7
+ cat <<'EOF9'> /etc/openvpn/xJuans.crt
 Certificate:
     Data:
         Version: 3 (0x2)
@@ -212,9 +542,16 @@ MQDqYween64Kvw7HB7zkaIPqXxqvEfDvR6fHQuvN0p52AJw096oj+S3DOaWaGaDc
 MvICMBb52Q1G6bTzGhjhNvPmYowvpXcwMGqcTxMRqWloIYox8dyKVkSByR7zF9Ln
 OHzBUg==
 -----END CERTIFICATE-----
-ovpnsca
-
-cat << ovpndh > dh2048.pem
+EOF9
+ cat <<'EOF10' > /etc/openvpn/xJuans.key
+-----BEGIN PRIVATE KEY-----
+MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDCbbP09CnIUSkg7Y4qV
+jl/Owf/AXFtDs+8E0moCX0L6lGREiHeGre9Wzziyg2qqS/ehZANiAARY77g9+0tZ
+JsSZxJ2pwNUqqLKFjMOLv8jHBRoLu3XfkTgDa6e+tcS5gQqOj3Vjcn48njcS2Fwl
+rwwlnF2FzpaRn75vC6gGqa0Yz/l2iiQQtIm3AJ1y+HAAj95LLjV3y7Q=
+-----END PRIVATE KEY-----
+EOF10
+cat <<'EOF28' > /etc/openvpn/dh.pem
 -----BEGIN DH PARAMETERS-----
 MIIBCAKCAQEAlVC6TGc5lslb4j30NJ8VdH7iAmd3mM23FtYdgoz/wPzeWplDgnej
 N39TK4pRfg2g3IdhtIdqgbgYFJveaxJhY1TOyaiwx5jHlq5mq2nPQtIQiOmk/LzZ
@@ -223,117 +560,74 @@ c0KP+6LkGAZM01IJIozNAqQ5k/uVC4MzkgE9EmSIz5a6p48k3WyJu2j8tBjQJuRb
 z3pFYMzJx0RniuRVRRjIUF2hW6JLEQhqhTQZEDhnO7vW8rEcAfqwsaQ3sr8j7+FD
 k/KPGLimSf3dMSKhb/T9JY7J96/lXiPUewIBAg==
 -----END DH PARAMETERS-----
-ovpndh
-
-systemctl restart openvpn@server; cd
-
-echo "Installing socksproxy."
-loc=/etc/socksproxy
-mkdir $loc 2> /dev/null
-
-cat << 'basic' > $loc/basic.conf
-[ssh]
-timer = 0
-sport = 80
-dport = 22
-
-[openvpn]
-timer = 0
-sport = 8880
-dport = 1194
-basic
-
-web=$loc/web
-mkdir $web 2> /dev/null
-
-cat << web > $web/index.html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>SocksProxy</title>
-    <meta name="viewport" content="width=device-width">
-</head>
-<body>
-    <center>SocksProxy Server by<br><a href="https://fb.me/theMovesFever">Dexter Cellona Banawon</a><br><br>Copyright &#169; 2020</center>
-</body>
-</html>
-web
-
-cat << ovpnconf > $web/$MYIP.ovpn
-client
-dev tun
-proto tcp
-remote $MYIP 1194
-route-method exe
-mute-replay-warnings
-http-proxy $MYIP 8890
-verb 3
-auth-user-pass
-cipher none
-auth none
-<ca>
+EOF28
+cat <<'EOF29' > /etc/openvpn/ta.key
+#
+# 2048 bit OpenVPN static key
+#
+-----BEGIN OpenVPN Static key V1-----
+7e15f11cddf9604647bc0fe181f174c1
+3f6a9ecda3a4f0d759b4cf1bc4e092a4
+fffe34d9c5d98eaab6e19572cc0c4153
+753c9446209b737de772f938090705fd
+5151e51ae95248b30723542fcf71d9c3
+d60a12a1e35dcd73e2ac3acffaf33763
+0753eede6eecee0536e7165ca4525ba2
+c16e1fbc38b5bc2259f5200baab1b1bb
+66e32855aab2d4a1d9e898adbc8486dc
+64d87e3b1a164fc54f125a04fa572796
+0f888b16d409cd3785bd8086153485eb
+3af1dac1fe1f11170af786e56283f305
+dfff819a87fefca63dd88cee89d39089
+04c871b897fb30c2c405bf1fd6fcdfea
+babf56ffea17c525a94e1c403b742c29
+d43e69d056f19f5ed6b91c6696271a44
+-----END OpenVPN Static key V1-----
+EOF29
+cat <<'EOF30' > /etc/openvpn/CLIENT.key
+-----BEGIN PRIVATE KEY-----
+MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDD9JqzDjCtqrpDBtMM6
+nkTbX+t8eq0U1qB5F3q6ykCm8E5gGrLLOQllP0nyFBZHGRyhZANiAASY+qLrArcf
+EMIJ1Vc4RPrQS+XIirwXmB7Xj94ROlpHF38otKbYpJkKXXHdgIIKwYmmRK7MMNlt
+4HWCg3YIzXdoC976X/5Y94sBii4b5lMm75btNVpOEEz5akG59J5j5hw=
+-----END PRIVATE KEY-----
+EOF30
+cat <<'EOF31' > /etc/openvpn/CLIENT.crt
 -----BEGIN CERTIFICATE-----
-MIIDxjCCA02gAwIBAgIUHOYpgZtNLLVaLXdqWXPl2wXN7zAwCgYIKoZIzj0EAwIw
-gasxCzAJBgNVBAYTAlBIMREwDwYDVQQIDAhCYXRhbmdhczEWMBQGA1UEBwwNQmF0
-YW5nYXMgQ2l0eTEXMBUGA1UECgwOR2FtZXJzIFZQTiBIdWIxGTAXBgNVBAsMEFBo
-Q29ybmVyLUdWUE5IVUIxFzAVBgNVBAMMDkdWUE5IVUItU2VydmVyMSQwIgYJKoZI
-hvcNAQkBFhVpbWFwc3ljaG8yOEBnbWFpbC5jb20wIBcNMjEwMTI4MTM0NTI3WhgP
-MjA4MDAzMTkxMzQ1MjdaMIGrMQswCQYDVQQGEwJQSDERMA8GA1UECAwIQmF0YW5n
-YXMxFjAUBgNVBAcMDUJhdGFuZ2FzIENpdHkxFzAVBgNVBAoMDkdhbWVycyBWUE4g
-SHViMRkwFwYDVQQLDBBQaENvcm5lci1HVlBOSFVCMRcwFQYDVQQDDA5HVlBOSFVC
-LVNlcnZlcjEkMCIGCSqGSIb3DQEJARYVaW1hcHN5Y2hvMjhAZ21haWwuY29tMHYw
-EAYHKoZIzj0CAQYFK4EEACIDYgAEDY0BO/SRsYYGZy+PKyCf7jruD/Sanr2GrNxC
-YQ8vzbUqKvyjP+wIQXBJ//Ba8bOJH3K2dtKh3hzbaDdxzSjCxG9W36YdBCXxbDl8
-kWMNjugeNySZ4QgVm5mFEA4r4uEYo4IBLDCCASgwHQYDVR0OBBYEFOxhLQt+r3qA
-q173jqObhxF3BnESMIHrBgNVHSMEgeMwgeCAFOxhLQt+r3qAq173jqObhxF3BnES
-oYGxpIGuMIGrMQswCQYDVQQGEwJQSDERMA8GA1UECAwIQmF0YW5nYXMxFjAUBgNV
-BAcMDUJhdGFuZ2FzIENpdHkxFzAVBgNVBAoMDkdhbWVycyBWUE4gSHViMRkwFwYD
-VQQLDBBQaENvcm5lci1HVlBOSFVCMRcwFQYDVQQDDA5HVlBOSFVCLVNlcnZlcjEk
-MCIGCSqGSIb3DQEJARYVaW1hcHN5Y2hvMjhAZ21haWwuY29tghQc5imBm00stVot
-d2pZc+XbBc3vMDAMBgNVHRMEBTADAQH/MAsGA1UdDwQEAwIBBjAKBggqhkjOPQQD
-AgNnADBkAjAlVh2EtpofZcHyTPD6u/GrKCPvSPqdz2+6/ybXuXa+VRGzoTrQ3cRf
-VZPAbgSqEskCMHnvJ9Pm/bGbaXQ6pLgYeUBWRr1wWPeXFVs4caKRpSzZC73dKFdZ
-Al+0Oxso76FBPg==
+MIID1TCCA1ugAwIBAgIQP3A8M99pxRMyOIEH8ZoG/jAKBggqhkjOPQQDAjCBqzEL
+MAkGA1UEBhMCUEgxETAPBgNVBAgMCEJhdGFuZ2FzMRYwFAYDVQQHDA1CYXRhbmdh
+cyBDaXR5MRcwFQYDVQQKDA5HYW1lcnMgVlBOIEh1YjEZMBcGA1UECwwQUGhDb3Ju
+ZXItR1ZQTkhVQjEXMBUGA1UEAwwOR1ZQTkhVQi1TZXJ2ZXIxJDAiBgkqhkiG9w0B
+CQEWFWltYXBzeWNobzI4QGdtYWlsLmNvbTAgFw0yMTAxMjgxMzU5MTBaGA8yMDgw
+MDMxOTEzNTkxMFowgasxCzAJBgNVBAYTAlBIMREwDwYDVQQIDAhCYXRhbmdhczEW
+MBQGA1UEBwwNQmF0YW5nYXMgQ2l0eTEXMBUGA1UECgwOR2FtZXJzIFZQTiBIdWIx
+GTAXBgNVBAsMEFBoQ29ybmVyLUdWUE5IVUIxFzAVBgNVBAMMDkdWUE5IVUItQ2xp
+ZW50MSQwIgYJKoZIhvcNAQkBFhVpbWFwc3ljaG8yOEBnbWFpbC5jb20wdjAQBgcq
+hkjOPQIBBgUrgQQAIgNiAASY+qLrArcfEMIJ1Vc4RPrQS+XIirwXmB7Xj94ROlpH
+F38otKbYpJkKXXHdgIIKwYmmRK7MMNlt4HWCg3YIzXdoC976X/5Y94sBii4b5lMm
+75btNVpOEEz5akG59J5j5hyjggE+MIIBOjAJBgNVHRMEAjAAMB0GA1UdDgQWBBQ7
+k1OI68EH8CWjQ0EyeIVF7fewGDCB6wYDVR0jBIHjMIHggBTsYS0Lfq96gKte946j
+m4cRdwZxEqGBsaSBrjCBqzELMAkGA1UEBhMCUEgxETAPBgNVBAgMCEJhdGFuZ2Fz
+MRYwFAYDVQQHDA1CYXRhbmdhcyBDaXR5MRcwFQYDVQQKDA5HYW1lcnMgVlBOIEh1
+YjEZMBcGA1UECwwQUGhDb3JuZXItR1ZQTkhVQjEXMBUGA1UEAwwOR1ZQTkhVQi1T
+ZXJ2ZXIxJDAiBgkqhkiG9w0BCQEWFWltYXBzeWNobzI4QGdtYWlsLmNvbYIUHOYp
+gZtNLLVaLXdqWXPl2wXN7zAwEwYDVR0lBAwwCgYIKwYBBQUHAwIwCwYDVR0PBAQD
+AgeAMAoGCCqGSM49BAMCA2gAMGUCMQCcX8H4y/yh0FX+KfMlr0pddojAMgDxDzcL
+5VfOMho4C3M391KsvzQX2NBkays6k+ICMEzaiI32hS2zvkspVCAsSANl/4nxKSdG
+FPFq6nTFawZekRJycKDCTCXDXUaCpIXbAw==
 -----END CERTIFICATE-----
-</ca>
-ovpnconf
+EOF31
 
-docker run -d --name socksproxyX \
-  -v $loc/basic.conf:$loc/server.conf -v $web:$web \
-  --net host --cap-add NET_ADMIN xdcb/smart-bypass:socksproxyX
+ # Getting some OpenVPN plugins for unix authentication
+ wget -qO /etc/openvpn/b.zip 'https://github.com/imaPSYCHO/Parts/raw/main/openvpn_plugin64'
+ unzip -qq /etc/openvpn/b.zip -d /etc/openvpn
+ rm -f /etc/openvpn/b.zip
 
-echo "Adding service: socksproxy"
-cat << service > /etc/systemd/system/socksproxy.service
-[Unit]
-Description=Socks Proxy
-Wants=network.target
-After=network.target
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/docker start socksproxyX
-ExecStop=/usr/bin/docker stop socksproxyX
-[Install]
-WantedBy=network.target
-service
-
-systemctl daemon-reload
-systemctl enable socksproxy
-systemctl start socksproxy
-
-cat << service > /etc/systemd/system/iptab.service
-[Unit]
-Description=OpenVPN IP Table
-Wants=network.target
-After=network.target
-DefaultDependencies=no
-[Service]
-ExecStart=/sbin/iptab
-Type=oneshot
-RemainAfterExit=yes
-[Install]
-WantedBy=network.target
-service
+  # Some workaround for OpenVZ machines for "Startup error" openvpn service
+ if [[ "$(hostnamectl | grep -i Virtualization | awk '{print $2}' | head -n1)" == 'openvz' ]]; then
+ sed -i 's|LimitNPROC|#LimitNPROC|g' /lib/systemd/system/openvpn*
+ systemctl daemon-reload
+fi
 
 cat << 'iptabc' > /sbin/iptab
 #!/bin/bash
@@ -358,105 +652,26 @@ iptabc
 
 chmod a+x /sbin/iptab
 
-echo "Installing BadVPN."
-docker run -d --restart always --name badvpn \
- --net host --cap-add NET_ADMIN \
- --entrypoint "badvpn-udpgw" \
- xdcb/vpn:badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 1000 --max-connections-for-client 10
+ systemctl start openvpn@server_tcp
+ systemctl enable openvpn@server_tcp
+ systemctl restart openvpn@server_tcp
 
-echo "Adding menu 'xdcb'."
-bin=/usr/local/bin
-cat << 'menu' > $bin/xdcb
-#!/bin/bash
-add() {
-cat << msg
-
- ================================
-|         Create Account         |
- ================================
-| Note: Leave duration empty
-|       for non-expiring account
-msg
-read -p "    Username : " -e USER
-read -p "    Password : " -e PASS
-read -p "    Days     : " -e DAYS
-exp=`date -d "+$DAYS days" +%F`
-[ $DAYS ] && ex="-e $exp"
-useradd $ex -NM -s /bin/false $USER 2> /dev/null
-echo -e "$PASS\n$PASS\n" | passwd $USER 2> /dev/null
-clear
-cat << info
-~ Account Info ~
-Username : $USER
-Password : $PASS
-Expiration Date : `[ $DAYS ] && echo $DAYS || echo "None"`
-
-~ Server Ports ~
-OHP :
-info
-IFS=$'\n' arr=`cat /etc/socksproxy/server.conf`
-for line in $arr; do
-	[ `grep "^sport" <<< "$line"` ] && s=$((line))
-	[ `grep "^timer" <<< "$line"` ] && t=$((line))
-	if [[ $t && $s ]]; then
-		[ $t -ge 30 ] && t+="s" || t="No"
-		echo "   - $s ($t timer)"
-		unset t s
-	fi
-done
-echo "SSH :"
-netstat -tulpn | egrep "tcp .+ssh" | egrep -o ":[0-9]{2,}" | sed -e "s/:/   - /g"
-exit 0
+ 
+ # Creating nginx config for our ovpn config downloads webserver
+ cat <<'myNginxC' > /etc/nginx/conf.d/bonveio-ovpn-config.conf
+# My OpenVPN Config Download Directory
+server {
+ listen 0.0.0.0:1998;
+ server_name localhost;
+ root /var/www/openvpn;
+ index index.html;
 }
+myNginxC
 
-del() {
-echo "== ! Delete Account ! =="
-read -p "Username : " -e USER
-userdel -f -r $USER 2> /dev/null
-echo "$USER deleted"
-exit 0
-}
-
-list() {
-cat << msg
-
- ======================
-|   List of Accounts   |
- ======================
-msg
-egrep -v 'root|:[\*!]' /etc/shadow | sed -e 's|:.*||g;s|^|   - |g' -
-exit 0
-}
-case $1 in
-accadd)
-	add;;
-accdel)
-	del;;
-acclist)
-	list;;
-esac
-cat << msg
-
- ==================
-|   Menu Options   |
- ==================
-     - accadd
-     - acclist
-     - accdel
-| Usage: xdcb [option]
-
-Credits: Dexter Cellona Banawon (X-DCB)
-msg
-exit 0
-menu
-
-chmod a+x $bin/*
-
-cd; echo "Optimizing server."
-cat << sysctl > /etc/sysctl.d/xdcb.conf
+cat << sysctl > /etc/sysctl.d/bbr.conf
 net.ipv4.ip_forward=1
 net.ipv4.tcp_rmem=65535 131072 4194304
-net.ipv4.tcp_wmem=65535 131072 194304
+net.ipv4.tcp_wmem=65535 131072 4194304
 net.ipv4.ip_default_ttl=50
 net.ipv4.tcp_congestion_control=bbr
 net.core.wmem_default=262144
@@ -469,9 +684,88 @@ net.ipv6.conf.all.accept_ra=2
 sysctl
 sysctl --system
 
-clear
+rm -rf /etc/nginx/sites-*
+rm -rf /var/www/openvpn
+mkdir -p /var/www/openvpn
 
-rm -f $0 ~/.bash_history
-history -c
-echo '' > /var/log/syslog
-exit 0
+cat <<wsovpn> /var/www/openvpn/wsovpn.ovpn
+# CLICK 1 AD A DAY TO HELP US
+# Ꮐᐯᑭᑎᕼᑌᗷ.com
+client
+dev tun
+proto tcp
+remote $IPADDR 112
+remote-cert-tls server
+tun-mtu 1500
+mssfix 1450
+auth-user-pass
+auth sha256
+cipher AES-256-CBC
+comp-lzo
+setenv CLIENT_CERT 1
+
+<ca>
+$(cat /etc/openvpn/ca.crt)
+</ca>
+<cert>
+$(cat /etc/openvpn/CLIENT.crt)
+</cert>
+<key>
+$(cat /etc/openvpn/ta.key)
+$(cat /etc/openvpn/CLIENT.key)
+</key>
+wsovpn
+}
+
+function ScriptMessage(){
+ echo -e ""
+ echo -e " \033[0;36m(｡◕‿◕｡)\033[0m \033[0;31mLaravel Installer \033[0m"
+ echo -e " \033[0;31m Script Created:\033[0m \033[0;36mGVPNHUB-Juan\033[0m"
+ echo -e ""
+
+}
+
+# Start of Installing Every Function
+ 
+ ScriptMessage
+ 
+ sleep 2
+
+echo -e "\033[0;33m Updating... \033[0m"
+Updating
+
+echo -e "\033[0;33m Installing Updates...\033[0m"
+Installing
+
+echo -e "\033[0;33m Modifying System... \033[0m"
+MOD
+
+echo -e "\033[0;33m Getting Websocket Service... \033[0m"
+service
+
+echo -e "\033[0;33m Setting Up Websocket Service... \033[0m"
+service1
+
+echo -e "\033[0;33m Installing OpenVPN... \033[0m"
+InsOpenVPN
+systemctl daemon-reload
+systemctl enable yakult
+systemctl restart yakult
+
+clear 
+
+# showing Additional Info
+ScriptMessage
+
+echo -e ""
+echo -e "\033[0;33m Success Installation \033[0m"
+echo -e ""
+echo -e "\033[0;33m Script NOT FOR SALE \033[0m"
+echo -e "\033[0;33m REPORT to kakatol@ninjadns.net \033[0m"
+
+ # Clearing all logs from installation
+ rm -rf /root/.bash_history && history -c && echo '' > /var/log/syslog
+
+rm -rf /root/tes*
+
+exit 1
