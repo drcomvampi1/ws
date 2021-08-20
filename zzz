@@ -45,11 +45,11 @@ apt upgrade -y
 
 function Installing() {
 
-apt install openssh-server -y
-ufw allow ssh
-systemctl start ssh
-apt install nginx -y
-apt install ca-certificates -y
+    sudo apt install openssh-server -y
+    sudo ufw allow ssh
+    sudo systemctl start ssh -y
+    apt install nginx -y
+    apt install ca-certificates -y
 apt install apt-transport-https -y
 apt install curl -y
 apt install gnupg2 -y
@@ -101,12 +101,10 @@ AcceptEnv LANG LC_*
 Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
-systemctl restart ssh
-
 }
 
 function service() {
-
+systemctl restart ssh
 wget -qO /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services2.py
 chmod +x /usr/sbin/yakult
 
@@ -134,13 +132,12 @@ Restart=on-failure
 WantedBy=multi-user.target
 END
 
-systemctl daemon-reload
-systemctl enable yakult
-systemctl restart yakult
-
 }
     
 function InsOpenVPN() {
+systemctl daemon-reload
+systemctl enable yakult
+systemctl restart yakult
  # Checking if openvpn folder is accidentally deleted or purged
  if [[ ! -e /etc/openvpn ]]; then
   mkdir -p /etc/openvpn
@@ -370,7 +367,7 @@ EOF31
  systemctl enable openvpn@server_tcp
  systemctl restart openvpn@server_tcp
 
-cat << 'iptabc' > /sbin/iptab
+cat << 'iptabc' > /usr/bin/iptab
 #!/bin/bash
 INET="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)"
 iptables -F
@@ -391,13 +388,8 @@ iptables -A INPUT -p tcp -m state --state NEW,ESTABLISHED --dport 22 -j ACCEPT
 iptables -t filter -A FORWARD -j REJECT --reject-with icmp-port-unreachable
 iptabc
 
-chmod a+x /sbin/iptab
+chmod +x /usr/bin/iptab
 
- systemctl start openvpn@server_tcp
- systemctl enable openvpn@server_tcp
- systemctl restart openvpn@server_tcp
-
- 
  # Creating nginx config for our ovpn config downloads webserver
  cat <<'myNginxC' > /etc/nginx/conf.d/bonveio-ovpn-config.conf
 # My OpenVPN Config Download Directory
@@ -512,9 +504,8 @@ mySiteOvpn
  sed -i "s|MyScriptName|$MyScriptName|g" /var/www/openvpn/index.html
  sed -i "s|NGINXPORT|$OvpnDownload_Port|g" /var/www/openvpn/index.html
  sed -i "s|IP-ADDRESS|$IPADDR|g" /var/www/openvpn/index.html
-
- systemctl restart nginx
-
+ 
+systemctl restart nginx
 }
 
 function ScriptMessage(){
