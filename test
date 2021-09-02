@@ -60,6 +60,14 @@ AcceptEnv LANG LC_*
 Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
+sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
+ sed -i 's/use_authtok //g' /etc/pam.d/common-password
+
+  sed -i '/\/bin\/false/d' /etc/shells
+ sed -i '/\/usr\/sbin\/nologin/d' /etc/shells
+ echo '/bin/false' >> /etc/shells
+ echo '/usr/sbin/nologin' >> /etc/shells
+  systemctl restart ssh
 rm -rf /etc/default/dropbear*
 
  cat <<'MyDropbear' > /etc/default/dropbear
@@ -73,7 +81,7 @@ DROPBEAR_DSSKEY="/etc/dropbear/dropbear_dss_host_key"
 DROPBEAR_ECDSAKEY="/etc/dropbear/dropbear_ecdsa_host_key"
 DROPBEAR_RECEIVE_WINDOW=65536
 MyDropbear
-
+systemctl restart dropbear
 }
 xSSH
 
@@ -85,6 +93,8 @@ function xBANNER() {
 xBANNER
 
 function InsStunnel(){
+
+
  StunnelDir=$(ls /etc/default | grep stunnel | head -n1)
 
  # Creating stunnel startup config using cat eof tricks
@@ -103,7 +113,7 @@ MyStunnelD
  rm -rf /etc/stunnel/*
 
  # Creating stunnel certifcate using openssl
- openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=$MyScriptName/OU=$MyScriptName/CN=$MyScriptName" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
+ openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=GVPNHUB/OU=GVPNHUB/CN=GVPNHUB" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
 ##  > /dev/null 2>&1
 
  # Creating stunnel server config
@@ -169,9 +179,12 @@ function xfirewall() {
  firewall-cmd --quiet --permanent --add-service=ssh
  firewall-cmd --quiet --permanent --add-service=http
  firewall-cmd --quiet --permanent --add-service=https
+ firewall-cmd --quiet --permanent --add-service=stunnel4
  firewall-cmd --quiet --permanent --add-service=privoxy
  firewall-cmd --quiet --permanent --add-service=squid
  firewall-cmd --quiet --reload
+
+ iptables -A INPUT -s $(wget -4qO- http://ipinfo.io/ip) -p tcp -m multiport --dport 1:65535 -j ACCEPT
  }
  xfirewall
 
@@ -273,48 +286,6 @@ net.core.default_qdisc=fq
 net.ipv6.conf.all.accept_ra=2
 sysctl
 sysctl --system
-
-# Instal DDOS Flate
-if [ -d '/usr/local/ddos' ]; then
-	echo; echo; echo "Please uninstall the previous version first"
-	exit 0
-else
-	mkdir /usr/local/ddos
-fi
-clear
-echo; echo 'Installing DOS-Deflate 0.6'; echo
-echo; echo -n 'Downloading source files...'
-wget -q -O /usr/local/ddos/ddos.conf http://www.inetbase.com/scripts/ddos/ddos.conf
-echo -n '.'
-wget -q -O /usr/local/ddos/LICENSE http://www.inetbase.com/scripts/ddos/LICENSE
-echo -n '.'
-wget -q -O /usr/local/ddos/ignore.ip.list http://www.inetbase.com/scripts/ddos/ignore.ip.list
-echo -n '.'
-wget -q -O /usr/local/ddos/ddos.sh http://www.inetbase.com/scripts/ddos/ddos.sh
-chmod 0755 /usr/local/ddos/ddos.sh
-cp -s /usr/local/ddos/ddos.sh /usr/local/sbin/ddos
-echo '...done'
-echo; echo -n 'Creating cron to run script every minute.....(Default setting)'
-/usr/local/ddos/ddos.sh --cron > /dev/null 2>&1
-echo '.....done'
-echo; echo 'Installation has completed.'
-echo 'Config file is at /usr/local/ddos/ddos.conf'
-
-iptables -A FORWARD -m string --string "get_peers" --algo bm -j DROP
-iptables -A FORWARD -m string --string "announce_peer" --algo bm -j DROP
-iptables -A FORWARD -m string --string "find_node" --algo bm -j DROP
-iptables -A FORWARD -m string --algo bm --string "BitTorrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "BitTorrent protocol" -j DROP
-iptables -A FORWARD -m string --algo bm --string "peer_id=" -j DROP
-iptables -A FORWARD -m string --algo bm --string ".torrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "announce.php?passkey=" -j DROP
-iptables -A FORWARD -m string --algo bm --string "torrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "announce" -j DROP
-iptables -A FORWARD -m string --algo bm --string "info_hash" -j DROP
-iptables-save > /etc/iptables.up.rules
-iptables-restore -t < /etc/iptables.up.rules
-netfilter-persistent save
-netfilter-persistent reload
 
  }
  wssh
