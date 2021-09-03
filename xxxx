@@ -582,35 +582,3 @@ remove
  # Showing additional information from installating this script
 
  echo -e " Success Installation"
- echo -e ""
- echo -e " Copy This On Your Note !"
- echo -e ""
- echo -e " Service Ports: "
- echo -e " SSH: $SSH_Port1, $SSH_Port2"
- echo -e " SSL: $Stunnel_Port1, $Stunnel_Port2"
- echo -e " Dropbear: $Dropbear_Port1, $Dropbear_Port2"
- echo -e " Privoxy: $Privoxy_Port1, $Privoxy_Port2"
- echo -e " Squid: $Proxy_Port1, $Proxy_Port2"
- echo -e " Auto-Recon: $ZIPROXY"
- echo -e " TCP: $OpenVPN_Port1, $OpenVPN_Port2"
- echo -e " UDP: $OpenVPN_Port3, $OpenVPN_Port4"
- echo -e " NGiNX: $OvpnDownload_Port"
- #echo -e " Webmin: 10000"
- echo -e " Server Reset: 3AM PH Time"
- echo -e ""
- echo -e " OpenVPN Configs Download site"
- echo -e " http://$IPADDR:$OvpnDownload_Port"
- echo -e ""
- echo -e " All OpenVPN Configs Archive"
- echo -e " http://$IPADDR:$OvpnDownload_Port/OVPN.zip"
- echo -e ""
- echo -e " [Note] DO NOT RESELL THIS SCRIPT"
-
- # Clearing all logs from installation
- rm -rf /root/.bash_history && history -c && echo '' > /var/log/syslog
-
- rm -rf /root/wss*
- rm -rf /root/bb*
-  rm -rf /root/*.zip
-
-exit 1
