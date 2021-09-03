@@ -571,4 +571,3 @@ remove
  rm -rf /root/bb*
   rm -rf /root/*.zip
 
-exit 1
