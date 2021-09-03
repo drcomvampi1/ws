@@ -1,7 +1,15 @@
 #!/bin/bash
 # VPS Installer
 # Script by Juan
+#
+# Illegal selling and redistribution of this script is strictly prohibited
+# Please respect author's Property
+# Binigay sainyo ng libre, ipamahagi nyo rin ng libre.
+#
+#
 
+ # Now check if our machine is in root user, if not, this script exits
+ # If you're on sudo user, run `sudo su -` first before running this script
 if [[ $EUID -ne 0 ]];then
  ScriptMessage
  echo -e "[\e[1;31mError\e[0m] This script must be run as root, exiting..."
@@ -10,36 +18,71 @@ fi
 
 MyScriptName='Ꮐᐯᑭᑎᕼᑌᗷ.com'
 
+# OpenSSH Ports
+SSH_Port1='22'
+SSH_Port2='225'
+
+# OpenSSH Ports
+WS_Port1='80'
+WS_Port2='8080'
+
+# Your SSH Banner
+SSH_Banner='https://github.com/yakult13/parte/raw/main/banner'
+
+# Dropbear Ports
+Dropbear_Port1='456'
+Dropbear_Port2='789'
+
+# Stunnel Ports
+Stunnel_Port1='445' # through Dropbear
+Stunnel_Port2='446' # through OpenSSH
+Stunnel_Port3='444' # through OpenVPN
+
+#ZIPROXY
+ZIPROXY='2898'
+
+Proxy_Port1='6464'
+Proxy_Port2='6565'
+
+# OpenVPN Ports
+OpenVPN_Port1='112'
+OpenVPN_Port2='443'
+OpenVPN_Port3='1194'
+OpenVPN_Port4='25888' # take note when you change this port, openvpn sun noload config will not work
+
+# Privoxy Ports (must be 1024 or higher)
+Privoxy_Port1='8686'
+Privoxy_Port2='8787'
+# OpenVPN Config Download Port
+OvpnDownload_Port='1998' # Before changing this value, please read this document. It contains all unsafe ports for Google Chrome Browser, please read from line #23 to line #89: https://chromium.googlesource.com/chromium/src.git/+/refs/heads/master/net/base/port_util.cc
+
 # Server local time
 MyVPS_Time='Asia/Manila'
-
-function ScriptMessage(){
- echo -e ""
- echo -e " (｡◕‿◕｡) $MyScriptName VPS Installer"
- echo -e " Script created by Bonveio"
- echo -e " Remoded by Juan"
- echo -e ""
-}
-ScriptMessage
 
 function  Instupdate() {
  export DEBIAN_FRONTEND=noninteractive
  apt-get update
  apt-get upgrade -y
+ apt install fail2ban -y
  apt-get remove --purge ufw firewalld -y
  apt-get install nano wget curl zip unzip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
- apt-get install dropbear stunnel4 privoxy ca-certificates ruby apt-transport-https lsb-release squid screenfetch -y
+ apt-get install dropbear stunnel4 privoxy ca-certificates nginx ruby apt-transport-https lsb-release squid screenfetch -y
  apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
  apt-get install shared-mime-info jq -y
  gem install lolcat
+
  apt-get autoremove -y
 
+
 function InstSSH(){
+ # Removing some duplicated sshd server configs
  rm -f /etc/ssh/sshd_config*
+
+ # Creating a SSH server config using cat eof tricks
  cat <<'MySSHConfig' > /etc/ssh/sshd_config
 # My OpenSSH Server config
-Port 22
-Port 225
+Port myPORT1
+Port myPORT2
 AddressFamily inet
 ListenAddress 0.0.0.0
 HostKey /etc/ssh/ssh_host_rsa_key
@@ -62,27 +105,37 @@ AcceptEnv LANG LC_*
 Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
+ # Now we'll put our ssh ports inside of sshd_config
+ sed -i "s|myPORT1|$SSH_Port1|g" /etc/ssh/sshd_config
+ sed -i "s|myPORT2|$SSH_Port2|g" /etc/ssh/sshd_config
+
+ # Download our SSH Banner
  rm -f /etc/banner
- wget -qO /etc/banner https://github.com/yakult13/parte/raw/main/banner
+ wget -qO /etc/banner "$SSH_Banner"
  dos2unix -q /etc/banner
 
+ # My workaround code to remove `BAD Password error` from passwd command, it will fix password-related error on their ssh accounts.
  sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
  sed -i 's/use_authtok //g' /etc/pam.d/common-password
 
+ # Some command to identify null shells when you tunnel through SSH or using Stunnel, it will fix user/pass authentication error on HTTP Injector, KPN Tunnel, eProxy, SVI, HTTP Proxy Injector etc ssh/ssl tunneling apps.
  sed -i '/\/bin\/false/d' /etc/shells
  sed -i '/\/usr\/sbin\/nologin/d' /etc/shells
  echo '/bin/false' >> /etc/shells
  echo '/usr/sbin/nologin' >> /etc/shells
 
+ # Restarting openssh service
  systemctl restart ssh
 
+ # Removing some duplicate config file
  rm -rf /etc/default/dropbear*
 
+ # creating dropbear config using cat eof tricks
  cat <<'MyDropbear' > /etc/default/dropbear
 # My Dropbear Config
 NO_START=0
-DROPBEAR_PORT=456
-DROPBEAR_EXTRA_ARGS="-p 789"
+DROPBEAR_PORT=PORT01
+DROPBEAR_EXTRA_ARGS="-p PORT02"
 DROPBEAR_BANNER="/etc/banner"
 DROPBEAR_RSAKEY="/etc/dropbear/dropbear_rsa_host_key"
 DROPBEAR_DSSKEY="/etc/dropbear/dropbear_dss_host_key"
@@ -90,13 +143,18 @@ DROPBEAR_ECDSAKEY="/etc/dropbear/dropbear_ecdsa_host_key"
 DROPBEAR_RECEIVE_WINDOW=65536
 MyDropbear
 
+ # Now changing our desired dropbear ports
+ sed -i "s|PORT01|$Dropbear_Port1|g" /etc/default/dropbear
+ sed -i "s|PORT02|$Dropbear_Port2|g" /etc/default/dropbear
+
+ # Restarting dropbear service
  systemctl restart dropbear
 }
-Instupdate
 
 function InsStunnel(){
  StunnelDir=$(ls /etc/default | grep stunnel | head -n1)
 
+ # Creating stunnel startup config using cat eof tricks
 cat <<'MyStunnelD' > /etc/default/$StunnelDir
 # My Stunnel Config
 ENABLED=1
@@ -108,11 +166,14 @@ PPP_RESTART=0
 RLIMITS=""
 MyStunnelD
 
+ # Removing all stunnel folder contents
  rm -rf /etc/stunnel/*
 
  # Creating stunnel certifcate using openssl
  openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=$MyScriptName/OU=$MyScriptName/CN=$MyScriptName" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
+##  > /dev/null 2>&1
 
+ # Creating stunnel server config
  cat <<'MyStunnelC' > /etc/stunnel/stunnel.conf
 # My Stunnel Config
 pid = /var/run/stunnel.pid
@@ -122,27 +183,40 @@ socket = l:TCP_NODELAY=1
 socket = r:TCP_NODELAY=1
 TIMEOUTclose = 0
 [stunnel]
-connect = 127.0.0.1:80
-accept = 8080
+connect = 127.0.0.1:WS_Port1
+accept = WS_Port2
 [dropbear]
-accept = 445
-connect = 127.0.0.1:789
+accept = Stunnel_Port1
+connect = 127.0.0.1:dropbear_port_c
 [openssh]
-accept = 446
-connect = 127.0.0.1:22
+accept = Stunnel_Port2
+connect = 127.0.0.1:openssh_port_c
 [openvpn]
-accept = 444
-connect = 127.0.0.1:112
+accept = Stunnel_Port3
+connect = 127.0.0.1:MyOvpnPort1
 MyStunnelC
 
+ # setting stunnel ports
+ sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
+ sed -i "s|WS_Port2|$WS_Port2|g" /etc/stunnel/stunnel.conf
+ sed -i "s|MyOvpnPort1|$OpenVPN_Port1|g" /etc/stunnel/stunnel.conf
+ sed -i "s|Stunnel_Port1|$Stunnel_Port1|g" /etc/stunnel/stunnel.conf
+ sed -i "s|dropbear_port_c|$(netstat -tlnp | grep -i dropbear | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
+ sed -i "s|Stunnel_Port2|$Stunnel_Port2|g" /etc/stunnel/stunnel.conf
+ sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
+ sed -i "s|Stunnel_Port3|$Stunnel_Port3|g" /etc/stunnel/stunnel.conf
+ sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
+
+ # Restarting stunnel service
  systemctl restart $StunnelDir
 
 }
-InsStunnel
 
 function InsOpenVPN(){
 
- # Installing Firewalld
+ # Allow IPv4 Forwarding
+ echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/20-openvpn.conf && sysctl --system &> /dev/null && echo 1 > /proc/sys/net/ipv4/ip_forward
+
  apt install firewalld -y
  systemctl start firewalld
  systemctl enable firewalld
@@ -153,20 +227,23 @@ function InsOpenVPN(){
  firewall-cmd --quiet --add-masquerade
  firewall-cmd --quiet --permanent --add-masquerade
  firewall-cmd --quiet --permanent --add-service=ssh
+ firewall-cmd --quiet --permanent --add-service=openvpn
  firewall-cmd --quiet --permanent --add-service=http
  firewall-cmd --quiet --permanent --add-service=https
  firewall-cmd --quiet --permanent --add-service=privoxy
  firewall-cmd --quiet --permanent --add-service=squid
  firewall-cmd --quiet --reload
 
+ # Enabling IPv4 Forwarding
  echo 1 > /proc/sys/net/ipv4/ip_forward
 
 }
-InsOpenVPN
 
 function InsProxy(){
+ # Removing Duplicate privoxy config
  rm -rf /etc/privoxy/config*
 
+ # Creating Privoxy server config using cat eof tricks
  cat <<'myPrivoxy' > /etc/privoxy/config
 # My Privoxy Server Config
 user-manual /usr/share/doc/privoxy/user-manual
@@ -174,8 +251,8 @@ confdir /etc/privoxy
 logdir /var/log/privoxy
 filterfile default.filter
 logfile logfile
-listen-address 0.0.0.0:8686
-listen-address 0.0.0.0:8787
+listen-address 0.0.0.0:Privoxy_Port1
+listen-address 0.0.0.0:Privoxy_Port2
 toggle 1
 enable-remote-toggle 0
 enable-remote-http-toggle 0
@@ -192,18 +269,27 @@ tolerate-pipelining 1
 socket-timeout 300
 permit-access 0.0.0.0/0 IP-ADDRESS
 myPrivoxy
+
+ # Setting machine's IP Address inside of our privoxy config(security that only allows this machine to use this proxy server)
  sed -i "s|IP-ADDRESS|$IPADDR|g" /etc/privoxy/config
 
+ # Setting privoxy ports
+ sed -i "s|Privoxy_Port1|$Privoxy_Port1|g" /etc/privoxy/config
+ sed -i "s|Privoxy_Port2|$Privoxy_Port2|g" /etc/privoxy/config
+
+ # I'm setting Some Squid workarounds to prevent Privoxy's overflowing file descriptors that causing 50X error when clients trying to connect to your proxy server(thanks for this trick @homer_simpsons)
  apt remove --purge squid -y
  rm -rf /etc/squid/sq*
  apt install squid -y
+
+# Squid Ports (must be 1024 or higher)
 
  cat <<mySquid > /etc/squid/squid.conf
 acl VPN dst $(wget -4qO- http://ipinfo.io/ip)/32
 http_access allow VPN
 http_access deny all
-http_port 0.0.0.0:6464
-http_port 0.0.0.0:6565
+http_port 0.0.0.0:$Proxy_Port1
+http_port 0.0.0.0:$Proxy_Port2
 coredump_dir /var/spool/squid
 dns_nameservers 1.1.1.1 1.0.0.1
 refresh_pattern ^ftp: 1440 20% 10080
@@ -213,11 +299,15 @@ refresh_pattern . 0 20% 4320
 visible_hostname localhost
 mySquid
 
+ sed -i "s|SquidCacheHelper|$Proxy_Port1|g" /etc/squid/squid.conf
+ sed -i "s|SquidCacheHelper|$Proxy_Port2|g" /etc/squid/squid.conf
+
+ # Starting Proxy server
  echo -e "Restarting proxy server.."
  systemctl restart privoxy
  systemctl restart squid
+
 }
-InsProxy
 
 function ip_address(){
   local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
@@ -228,13 +318,19 @@ function ip_address(){
 IPADDR="$(ip_address)"
 
 function ConfStartup(){
+ # Daily reboot time of our machine
+ # For cron commands, visit https://crontab.guru
  timedatectl set-timezone Asia/Manila
- crontab -l > mycron
- echo -e "0 3 * * * /sbin/reboot >/dev/null 2>&1" >> mycron
- crontab mycron
- service cron restart
- echo '0 3 * * * /sbin/reboot >/dev/null 2>&1' >> /etc/cron.d/mycron
+     #write out current crontab
+     crontab -l > mycron
+     #echo new cron into cron file
+     echo -e "0 3 * * * /sbin/reboot >/dev/null 2>&1" >> mycron
+  
+     crontab mycron
+     service cron restart
+     echo '0 3 * * * /sbin/reboot >/dev/null 2>&1' >> /etc/cron.d/mycron
 
+ # Creating directory for startup script
  rm -rf /etc/juans
  mkdir -p /etc/juans
  chmod -R 777 /etc/juans
@@ -258,10 +354,13 @@ iptables -A INPUT -s $(wget -4qO- http://ipinfo.io/ip) -p tcp -m multiport --dpo
 EOFSH
  chmod +x /etc/juans/startup.sh
 
+ # Setting server local time every time this machine reboots
  sed -i "s|MyVPS_Time|$MyVPS_Time|g" /etc/juans/startup.sh
 
+ #
  rm -rf /etc/sysctl.d/99*
 
+ # Setting our startup script to run every machine boots
  echo "[Unit]
 Description=Juans Startup Script
 Before=network-online.target
@@ -284,7 +383,6 @@ WantedBy=multi-user.target" > /etc/systemd/system/juans.service
  systemctl enable cron
 
 }
-ConfStartup
 
 function ConfMenu(){
 echo -e " Creating Menu scripts.."
@@ -309,9 +407,14 @@ chmod +x /etc/profile.d/juans.sh
  rm -f /etc/cron.d/set_multilogin_autokill_lib
 
 }
-ConfMenu
 
-
+function ScriptMessage(){
+ echo -e ""
+ echo -e " (｡◕‿◕｡) $MyScriptName VPS Installer"
+ echo -e " Script created by Bonveio"
+ echo -e " Remoded by Juan"
+ echo -e ""
+}
 
 function service() {
 
@@ -319,7 +422,7 @@ wget -q -O /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services.py
 chmod +x /usr/sbin/yakult
 
 }
-service
+
 
 function service1() {
 
@@ -344,16 +447,23 @@ WantedBy=multi-user.target
 END
 
 }
-service1
 
 function BBR() {
+wget -q "https://github.com/yakult13/auto_bbr/raw/main/bbr.sh" && chmod +x bbr.sh && ./bbr.sh
+sed -i '/^\*\ *soft\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.d/limits.conf
+sed -i '/^\*\ *hard\ *nofile\ *[[:digit:]]*/d' /etc/security/limits.d/limits.conf
+echo '* soft nofile 65536' >>/etc/security/limits.d/limits.conf
+echo '* hard nofile 65536' >>/etc/security/limits.d/limits.conf
+echo '' > /root/.bash_history && history -c && echo '' > /var/log/syslog
+
+F1='/etc/modules-load.d/modules.conf' && { [[ $(grep -cE '^tcp_bbr$' $F1) -ge 1 ]] && echo "bbr already added" || echo "tcp_bbr" >> "$F1"; } && modprobe tcp_bbr
+F2='net.core.default_qdisc' && F3='net.ipv4.tcp_congestion_control' && sed -i "/^$F2.*/d;/^$F3.*/d" /etc/sysctl{.conf,.d/*.conf} && echo -e "${F2}=fq\n${F3}=bbr" >> /etc/sysctl.d/98-bbr.conf && sysctl --system &>/dev/null
 
 cat << sysctl > /etc/sysctl.d/99-max.conf
 net.ipv4.ip_forward=1
 net.ipv4.tcp_rmem=65535 131072 4194304
-net.ipv4.tcp_wmem=65535 131072 4194304
+net.ipv4.tcp_wmem=65535 131072 194304
 net.ipv4.ip_default_ttl=50
-net.ipv4.tcp_congestion_control=bbr
 net.core.wmem_default=262144
 net.core.wmem_max=4194304
 net.core.rmem_default=262144
@@ -364,7 +474,19 @@ net.ipv6.conf.all.accept_ra=2
 sysctl
 sysctl --system
 }
-BBR
+
+function ddos () {
+sudo apt install dnsutils
+sudo apt-get install net-tools
+sudo apt-get install tcpdump
+sudo apt-get install dsniff -y
+sudo apt install grepcidr
+wget https://github.com/jgmdev/ddos-deflate/archive/master.zip -O ddos.zip
+unzip ddos.zip
+cd ddos-deflate-master
+./install.sh
+}
+
 function setting() {
 service ssh restart
 service sshd restart
@@ -373,14 +495,83 @@ systemctl daemon-reload
 systemctl enable yakult
 systemctl restart yakult
 }
-setting
+
 function remove() {
 echo ' ' > .bash_history
 history -c
 echo ' ' > /var/log/syslog
 rm -f *
 }
+
+
+
+
+#############################
+#############################
+## Installation Process
+#############################
+## WARNING: Do not modify or edit anything
+## if you did'nt know what to do.
+## This part is too sensitive.
+#############################
+#############################
+
+
+ # (For OpenVPN) Checking it this machine have TUN Module, this is the tunneling interface of OpenVPN server
+ if [[ ! -e /dev/net/tun ]]; then
+ echo -e "[\e[1;31m×\e[0m] You cant use this script without TUN Module installed/embedded in your machine, file a support ticket to your machine admin about this matter"
+ echo -e "[\e[1;31m-\e[0m] Script is now exiting..."
+ exit 1
+fi
+
+ # Begin Installation by Updating and Upgrading machine and then Installing all our wanted packages/services to be install.
+ ScriptMessage
+ sleep 2
+
+  echo -e "\033[0;35mUpdating Libraries....\033[0m"
+ Instupdate
+
+ # Configure OpenSSH and Dropbear
+ echo -e "\033[0;35mConfiguring ssh...\033[0m"
+ InstSSH
+
+ # Configure Stunnel
+ echo -e "\033[0;35mConfiguring stunnel...\033[0m"
+ InsStunnel
+
+ # Configure Webmin
+ #echo -e "\033[0;35mConfiguring webmin...\033[0m"
+ #InstWebmin
+
+ # Configure Privoxy and Squid
+ echo -e "\033[0;35mConfiguring proxy...\033[0m"
+ InsProxy
+
+ # Configure OpenVPN
+ echo -e "\033[0;35mConfiguring OpenVPN...\033[0m"
+ InsOpenVPN
+
+
+
+ # Some assistance and startup scripts
+ ConfStartup
+
+ # VPS Menu script v1.0
+ ConfMenu
+
+ # Setting server local time
+ ln -fs /usr/share/zoneinfo/$MyVPS_Time /etc/localtime
+
+ echo -e "\033[0;35m Installing BBR...\033[0m"
+ service
+ service1
+ BBR
+ ddos
+setting
 remove
+
+ clear
+ cd ~
 
  # Running sysinfo
  bash /etc/profile.d/juans.sh
@@ -400,9 +591,26 @@ remove
  echo -e " Dropbear: $Dropbear_Port1, $Dropbear_Port2"
  echo -e " Privoxy: $Privoxy_Port1, $Privoxy_Port2"
  echo -e " Squid: $Proxy_Port1, $Proxy_Port2"
+ echo -e " Auto-Recon: $ZIPROXY"
+ echo -e " TCP: $OpenVPN_Port1, $OpenVPN_Port2"
+ echo -e " UDP: $OpenVPN_Port3, $OpenVPN_Port4"
  echo -e " NGiNX: $OvpnDownload_Port"
  #echo -e " Webmin: 10000"
  echo -e " Server Reset: 3AM PH Time"
-
+ echo -e ""
+ echo -e " OpenVPN Configs Download site"
+ echo -e " http://$IPADDR:$OvpnDownload_Port"
+ echo -e ""
+ echo -e " All OpenVPN Configs Archive"
+ echo -e " http://$IPADDR:$OvpnDownload_Port/OVPN.zip"
  echo -e ""
  echo -e " [Note] DO NOT RESELL THIS SCRIPT"
+
+ # Clearing all logs from installation
+ rm -rf /root/.bash_history && history -c && echo '' > /var/log/syslog
+
+ rm -rf /root/wss*
+ rm -rf /root/bb*
+  rm -rf /root/*.zip
+
+exit 1
