@@ -1,41 +1,34 @@
 #!/bin/bash
-# Websocket SSH Installer
+# VPS Installer
 # Script by Juan
 
-function ScriptMessage(){
- echo -e ""
- echo -e " (｡◕‿◕｡) Websocket SSH Installer"
- echo -e " Script created by Juan"
- echo -e ""
-}
+if [[ $EUID -ne 0 ]];then
+ ScriptMessage
+ echo -e "[\e[1;31mError\e[0m] This script must be run as root, exiting..."
+ exit 1
+fi
+
+MyScriptName='Ꮐᐯᑭᑎᕼᑌᗷ.com'
+
+# Server local time
+MyVPS_Time='Asia/Manila'
+
 ScriptMessage
 
-function ip_address(){
-  local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
-  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipv4.icanhazip.com )"
-  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipinfo.io/ip )"
-  [ ! -z "${IP}" ] && echo "${IP}" || echo
-}
-IPADDR="$(ip_address)"
-
-function xUpdates() {
-export DEBIAN_FRONTEND=noninteractive
+function  Instupdate() {
+ export DEBIAN_FRONTEND=noninteractive
  apt-get update
  apt-get upgrade -y
  apt-get remove --purge ufw firewalld -y
- apt-get install curl zip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
- apt-get install dropbear stunnel4 privoxy ca-certificates nginx ruby apt-transport-https lsb-release squid screenfetch -y
+ apt-get install nano wget curl zip unzip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
+ apt-get install dropbear stunnel4 privoxy ca-certificates ruby apt-transport-https lsb-release squid screenfetch -y
  apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
  apt-get install shared-mime-info jq -y
  gem install lolcat
  apt-get autoremove -y
-}
-xUpdates
 
-function xSSH() {
-rm -f /etc/ssh/sshd_config*
-
- # Creating a SSH server config using cat eof tricks
+function InstSSH(){
+ rm -f /etc/ssh/sshd_config*
  cat <<'MySSHConfig' > /etc/ssh/sshd_config
 # My OpenSSH Server config
 Port 22
@@ -62,15 +55,21 @@ AcceptEnv LANG LC_*
 Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
-sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
+ rm -f /etc/banner
+ wget -qO /etc/banner https://github.com/yakult13/parte/raw/main/banner
+ dos2unix -q /etc/banner
+
+ sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
  sed -i 's/use_authtok //g' /etc/pam.d/common-password
 
-  sed -i '/\/bin\/false/d' /etc/shells
+ sed -i '/\/bin\/false/d' /etc/shells
  sed -i '/\/usr\/sbin\/nologin/d' /etc/shells
  echo '/bin/false' >> /etc/shells
  echo '/usr/sbin/nologin' >> /etc/shells
- 
-rm -rf /etc/default/dropbear*
+
+ systemctl restart ssh
+
+ rm -rf /etc/default/dropbear*
 
  cat <<'MyDropbear' > /etc/default/dropbear
 # My Dropbear Config
@@ -84,21 +83,13 @@ DROPBEAR_ECDSAKEY="/etc/dropbear/dropbear_ecdsa_host_key"
 DROPBEAR_RECEIVE_WINDOW=65536
 MyDropbear
 
+ systemctl restart dropbear
 }
-xSSH
-
-function xBANNER() {
- rm -f /etc/banner
- wget -qO /etc/banner https://github.com/yakult13/parte/raw/main/banner
- dos2unix -q /etc/banner
-}
-xBANNER
+Instupdate
 
 function InsStunnel(){
-
  StunnelDir=$(ls /etc/default | grep stunnel | head -n1)
 
- # Creating stunnel startup config using cat eof tricks
 cat <<'MyStunnelD' > /etc/default/$StunnelDir
 # My Stunnel Config
 ENABLED=1
@@ -110,14 +101,11 @@ PPP_RESTART=0
 RLIMITS=""
 MyStunnelD
 
- # Removing all stunnel folder contents
  rm -rf /etc/stunnel/*
 
  # Creating stunnel certifcate using openssl
- openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=GVPNHUB/OU=GVPNHUB/CN=GVPNHUB" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
-##  > /dev/null 2>&1
+ openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=$MyScriptName/OU=$MyScriptName/CN=$MyScriptName" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
 
- # Creating stunnel server config
  cat <<'MyStunnelC' > /etc/stunnel/stunnel.conf
 # My Stunnel Config
 pid = /var/run/stunnel.pid
@@ -135,14 +123,102 @@ connect = 127.0.0.1:789
 [openssh]
 accept = 446
 connect = 127.0.0.1:22
-
+[openvpn]
+accept = 444
+connect = 127.0.0.1:112
 MyStunnelC
-
 
  systemctl restart $StunnelDir
 
 }
 InsStunnel
+
+function InsOpenVPN(){
+
+ # Installing Firewalld
+ apt install firewalld -y
+ systemctl start firewalld
+ systemctl enable firewalld
+ firewall-cmd --quiet --set-default-zone=public
+ firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/tcp
+ firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/udp
+ firewall-cmd --quiet --reload
+ firewall-cmd --quiet --add-masquerade
+ firewall-cmd --quiet --permanent --add-masquerade
+ firewall-cmd --quiet --permanent --add-service=ssh
+ firewall-cmd --quiet --permanent --add-service=http
+ firewall-cmd --quiet --permanent --add-service=https
+ firewall-cmd --quiet --permanent --add-service=privoxy
+ firewall-cmd --quiet --permanent --add-service=squid
+ firewall-cmd --quiet --reload
+
+ echo 1 > /proc/sys/net/ipv4/ip_forward
+
+}
+InsOpenVPN
+
+function InsProxy(){
+ rm -rf /etc/privoxy/config*
+
+ cat <<'myPrivoxy' > /etc/privoxy/config
+# My Privoxy Server Config
+user-manual /usr/share/doc/privoxy/user-manual
+confdir /etc/privoxy
+logdir /var/log/privoxy
+filterfile default.filter
+logfile logfile
+listen-address 0.0.0.0:8686
+listen-address 0.0.0.0:8787
+toggle 1
+enable-remote-toggle 0
+enable-remote-http-toggle 0
+enable-edit-actions 0
+enforce-blocks 0
+buffer-limit 4096
+enable-proxy-authentication-forwarding 1
+forwarded-connect-retries 1
+accept-intercepted-requests 1
+allow-cgi-request-crunching 1
+split-large-forms 0
+keep-alive-timeout 5
+tolerate-pipelining 1
+socket-timeout 300
+permit-access 0.0.0.0/0 IP-ADDRESS
+myPrivoxy
+ sed -i "s|IP-ADDRESS|$IPADDR|g" /etc/privoxy/config
+
+ apt remove --purge squid -y
+ rm -rf /etc/squid/sq*
+ apt install squid -y
+
+ cat <<mySquid > /etc/squid/squid.conf
+acl VPN dst $(wget -4qO- http://ipinfo.io/ip)/32
+http_access allow VPN
+http_access deny all
+http_port 0.0.0.0:6464
+http_port 0.0.0.0:6565
+coredump_dir /var/spool/squid
+dns_nameservers 1.1.1.1 1.0.0.1
+refresh_pattern ^ftp: 1440 20% 10080
+refresh_pattern ^gopher: 1440 0% 1440
+refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
+refresh_pattern . 0 20% 4320
+visible_hostname localhost
+mySquid
+
+ echo -e "Restarting proxy server.."
+ systemctl restart privoxy
+ systemctl restart squid
+}
+InsProxy
+
+function ip_address(){
+  local IP="$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )"
+  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipv4.icanhazip.com )"
+  [ -z "${IP}" ] && IP="$( wget -qO- -t1 -T2 ipinfo.io/ip )"
+  [ ! -z "${IP}" ] && echo "${IP}" || echo
+}
+IPADDR="$(ip_address)"
 
 function ConfStartup(){
  timedatectl set-timezone Asia/Manila
@@ -213,97 +289,39 @@ unzip -qq fixed1.zip
 rm -f fixed1.zip
 chmod +x ./*
 dos2unix ./* &> /dev/null
-
+sed -i 's|/etc/squid/squid.conf|/etc/privoxy/config|g' ./*
+sed -i 's|http_port|listen-address|g' ./*
 cd ~
 
 echo 'clear' > /etc/profile.d/juans.sh
 echo 'echo '' > /var/log/syslog' >> /etc/profile.d/juans.sh
 echo 'screenfetch -p -A Debian' >> /etc/profile.d/juans.sh
 chmod +x /etc/profile.d/juans.sh
+
+ # Turning Off Multi-login Auto Kill
+ rm -f /etc/cron.d/set_multilogin_autokill_lib
+
 }
 ConfMenu
 
-function xfirewall() {
- apt install firewalld -y
- systemctl start firewalld
- systemctl enable firewalld
- firewall-cmd --quiet --set-default-zone=public
- firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/tcp
- firewall-cmd --quiet --zone=public --permanent --add-port=1-65534/udp
- firewall-cmd --quiet --reload
- firewall-cmd --quiet --add-masquerade
- firewall-cmd --quiet --permanent --add-masquerade
- firewall-cmd --quiet --permanent --add-service=ssh
- firewall-cmd --quiet --permanent --add-service=http
- firewall-cmd --quiet --permanent --add-service=https
- firewall-cmd --quiet --permanent --add-service=privoxy
- firewall-cmd --quiet --permanent --add-service=squid
- firewall-cmd --quiet --reload
+function ScriptMessage(){
+ echo -e ""
+ echo -e " (｡◕‿◕｡) $MyScriptName VPS Installer"
+ echo -e " Script created by Bonveio"
+ echo -e " Remoded by Juan"
+ echo -e ""
+}
 
- }
- xfirewall
+function service() {
 
- function xsquid() {
-rm -rf /etc/privoxy/config*
-
- # Creating Privoxy server config using cat eof tricks
- cat <<'myPrivoxy' > /etc/privoxy/config
-# My Privoxy Server Config
-user-manual /usr/share/doc/privoxy/user-manual
-confdir /etc/privoxy
-logdir /var/log/privoxy
-filterfile default.filter
-logfile logfile
-listen-address 0.0.0.0:8686
-listen-address 0.0.0.0:8787
-toggle 1
-enable-remote-toggle 0
-enable-remote-http-toggle 0
-enable-edit-actions 0
-enforce-blocks 0
-buffer-limit 4096
-enable-proxy-authentication-forwarding 1
-forwarded-connect-retries 1
-accept-intercepted-requests 1
-allow-cgi-request-crunching 1
-split-large-forms 0
-keep-alive-timeout 5
-tolerate-pipelining 1
-socket-timeout 300
-permit-access 0.0.0.0/0 IP-ADDRESS
-myPrivoxy
-
- sed -i "s|IP-ADDRESS|$IPADDR|g" /etc/privoxy/config
-
- apt remove --purge squid -y
- rm -rf /etc/squid/sq*
- apt install squid -y
- cat <<mySquid > /etc/squid/squid.conf
-acl VPN dst $(wget -4qO- http://ipinfo.io/ip)/32
-http_access allow VPN
-http_access deny all
-http_port 0.0.0.0:6464
-http_port 0.0.0.0:6565
-coredump_dir /var/spool/squid
-dns_nameservers 1.1.1.1 1.0.0.1
-refresh_pattern ^ftp: 1440 20% 10080
-refresh_pattern ^gopher: 1440 0% 1440
-refresh_pattern -i (/cgi-bin/|\?) 0 0% 0
-refresh_pattern . 0 20% 4320
-visible_hostname localhost
-mySquid
-
-
- }
- xsquid
-
- function xpython() {
 wget -q -O /usr/sbin/yakult https://github.com/yakult13/ws/raw/main/services.py
 chmod +x /usr/sbin/yakult
- }
-xpython
 
- function wssh() {
+}
+service
+
+function service1() {
+
 cat << END > /lib/systemd/system/yakult.service
 [Unit]
 Description=Yakult
@@ -324,6 +342,11 @@ Restart=on-failure
 WantedBy=multi-user.target
 END
 
+}
+service1
+
+function BBR() {
+
 cat << sysctl > /etc/sysctl.d/99-max.conf
 net.ipv4.ip_forward=1
 net.ipv4.tcp_rmem=65535 131072 4194304
@@ -339,11 +362,9 @@ net.core.default_qdisc=fq
 net.ipv6.conf.all.accept_ra=2
 sysctl
 sysctl --system
-
- }
- wssh
-
- function setting() {
+}
+BBR
+function setting() {
 service ssh restart
 service sshd restart
 service dropbear restart
@@ -352,7 +373,6 @@ systemctl enable yakult
 systemctl restart yakult
 }
 setting
-
 function remove() {
 echo ' ' > .bash_history
 history -c
@@ -361,8 +381,28 @@ rm -f *
 }
 remove
 
-clear
+ # Running sysinfo
+ bash /etc/profile.d/juans.sh
 
-ScriptMessage
-echo -e "Installation done"
-echo -e "Type menu"
+ # Showing script's banner message
+ ScriptMessage
+
+ # Showing additional information from installating this script
+
+ echo -e " Success Installation"
+ echo -e ""
+ echo -e " Copy This On Your Note !"
+ echo -e ""
+ echo -e " Service Ports: "
+ echo -e " SSH: $SSH_Port1, $SSH_Port2"
+ echo -e " SSL: $Stunnel_Port1, $Stunnel_Port2"
+ echo -e " Dropbear: $Dropbear_Port1, $Dropbear_Port2"
+ echo -e " Privoxy: $Privoxy_Port1, $Privoxy_Port2"
+ echo -e " Squid: $Proxy_Port1, $Proxy_Port2"
+ echo -e " NGiNX: $OvpnDownload_Port"
+ #echo -e " Webmin: 10000"
+ echo -e " Server Reset: 3AM PH Time"
+
+ echo -e ""
+ echo -e " [Note] DO NOT RESELL THIS SCRIPT"
+ exit 1
