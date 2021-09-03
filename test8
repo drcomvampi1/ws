@@ -13,6 +13,13 @@ MyScriptName='Ꮐᐯᑭᑎᕼᑌᗷ.com'
 # Server local time
 MyVPS_Time='Asia/Manila'
 
+function ScriptMessage(){
+ echo -e ""
+ echo -e " (｡◕‿◕｡) $MyScriptName VPS Installer"
+ echo -e " Script created by Bonveio"
+ echo -e " Remoded by Juan"
+ echo -e ""
+}
 ScriptMessage
 
 function  Instupdate() {
@@ -304,13 +311,7 @@ chmod +x /etc/profile.d/juans.sh
 }
 ConfMenu
 
-function ScriptMessage(){
- echo -e ""
- echo -e " (｡◕‿◕｡) $MyScriptName VPS Installer"
- echo -e " Script created by Bonveio"
- echo -e " Remoded by Juan"
- echo -e ""
-}
+
 
 function service() {
 
@@ -405,4 +406,3 @@ remove
 
  echo -e ""
  echo -e " [Note] DO NOT RESELL THIS SCRIPT"
- exit 1
