@@ -179,7 +179,6 @@ function xfirewall() {
  firewall-cmd --quiet --permanent --add-service=ssh
  firewall-cmd --quiet --permanent --add-service=http
  firewall-cmd --quiet --permanent --add-service=https
- firewall-cmd --quiet --permanent --add-service=stunnel4
  firewall-cmd --quiet --permanent --add-service=privoxy
  firewall-cmd --quiet --permanent --add-service=squid
  firewall-cmd --quiet --reload
