@@ -10,44 +10,6 @@ fi
 
 MyScriptName='Ꮐᐯᑭᑎᕼᑌᗷ.com'
 
-# OpenSSH Ports
-SSH_Port1='22'
-SSH_Port2='225'
-
-# OpenSSH Ports
-WS_Port1='80'
-WS_Port2='8080'
-
-# Your SSH Banner
-SSH_Banner='https://github.com/yakult13/parte/raw/main/banner'
-
-# Dropbear Ports
-Dropbear_Port1='456'
-Dropbear_Port2='789'
-
-# Stunnel Ports
-Stunnel_Port1='445' # through Dropbear
-Stunnel_Port2='446' # through OpenSSH
-Stunnel_Port3='444' # through OpenVPN
-
-#ZIPROXY
-ZIPROXY='2898'
-
-Proxy_Port1='6464'
-Proxy_Port2='6565'
-
-# OpenVPN Ports
-OpenVPN_Port1='112'
-OpenVPN_Port2='443'
-OpenVPN_Port3='1194'
-OpenVPN_Port4='25888' 
-
-# Privoxy Ports (must be 1024 or higher)
-Privoxy_Port1='8686'
-Privoxy_Port2='8787'
-# OpenVPN Config Download Port
-OvpnDownload_Port='1998' 
-
 # Server local time
 MyVPS_Time='Asia/Manila'
 
@@ -55,36 +17,20 @@ function  Instupdate() {
  export DEBIAN_FRONTEND=noninteractive
  apt-get update
  apt-get upgrade -y
-
- apt install fail2ban -y
-
-  apt-get remove --purge ufw firewalld -y
-
- # Installing some important machine essentials
+ apt-get remove --purge ufw firewalld -y
  apt-get install nano wget curl zip unzip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
-
- # Now installing all our wanted services
  apt-get install dropbear stunnel4 privoxy ca-certificates ruby apt-transport-https lsb-release squid screenfetch -y
-
- # Installing all required packages to install Webmin
  apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
  apt-get install shared-mime-info jq -y
-
- # Installing a text colorizer
  gem install lolcat
-
- # Trying to remove obsolette packages after installation
  apt-get autoremove -y
 
 function InstSSH(){
- # Removing some duplicated sshd server configs
  rm -f /etc/ssh/sshd_config*
-
- # Creating a SSH server config using cat eof tricks
  cat <<'MySSHConfig' > /etc/ssh/sshd_config
 # My OpenSSH Server config
-Port myPORT1
-Port myPORT2
+Port 22
+Port 225
 AddressFamily inet
 ListenAddress 0.0.0.0
 HostKey /etc/ssh/ssh_host_rsa_key
@@ -107,37 +53,27 @@ AcceptEnv LANG LC_*
 Subsystem   sftp  /usr/lib/openssh/sftp-server
 MySSHConfig
 
- # Now we'll put our ssh ports inside of sshd_config
- sed -i "s|myPORT1|$SSH_Port1|g" /etc/ssh/sshd_config
- sed -i "s|myPORT2|$SSH_Port2|g" /etc/ssh/sshd_config
-
- # Download our SSH Banner
  rm -f /etc/banner
- wget -qO /etc/banner "$SSH_Banner"
+ wget -qO /etc/banner https://github.com/yakult13/parte/raw/main/banner
  dos2unix -q /etc/banner
 
- # My workaround code to remove `BAD Password error` from passwd command, it will fix password-related error on their ssh accounts.
  sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
  sed -i 's/use_authtok //g' /etc/pam.d/common-password
 
- # Some command to identify null shells when you tunnel through SSH or using Stunnel, it will fix user/pass authentication error on HTTP Injector, KPN Tunnel, eProxy, SVI, HTTP Proxy Injector etc ssh/ssl tunneling apps.
  sed -i '/\/bin\/false/d' /etc/shells
  sed -i '/\/usr\/sbin\/nologin/d' /etc/shells
  echo '/bin/false' >> /etc/shells
  echo '/usr/sbin/nologin' >> /etc/shells
 
- # Restarting openssh service
  systemctl restart ssh
 
- # Removing some duplicate config file
  rm -rf /etc/default/dropbear*
 
- # creating dropbear config using cat eof tricks
  cat <<'MyDropbear' > /etc/default/dropbear
 # My Dropbear Config
 NO_START=0
-DROPBEAR_PORT=PORT01
-DROPBEAR_EXTRA_ARGS="-p PORT02"
+DROPBEAR_PORT=456
+DROPBEAR_EXTRA_ARGS="-p 789"
 DROPBEAR_BANNER="/etc/banner"
 DROPBEAR_RSAKEY="/etc/dropbear/dropbear_rsa_host_key"
 DROPBEAR_DSSKEY="/etc/dropbear/dropbear_dss_host_key"
@@ -145,18 +81,12 @@ DROPBEAR_ECDSAKEY="/etc/dropbear/dropbear_ecdsa_host_key"
 DROPBEAR_RECEIVE_WINDOW=65536
 MyDropbear
 
- # Now changing our desired dropbear ports
- sed -i "s|PORT01|$Dropbear_Port1|g" /etc/default/dropbear
- sed -i "s|PORT02|$Dropbear_Port2|g" /etc/default/dropbear
-
- # Restarting dropbear service
  systemctl restart dropbear
 }
 
 function InsStunnel(){
  StunnelDir=$(ls /etc/default | grep stunnel | head -n1)
 
- # Creating stunnel startup config using cat eof tricks
 cat <<'MyStunnelD' > /etc/default/$StunnelDir
 # My Stunnel Config
 ENABLED=1
@@ -168,14 +98,11 @@ PPP_RESTART=0
 RLIMITS=""
 MyStunnelD
 
- # Removing all stunnel folder contents
  rm -rf /etc/stunnel/*
 
  # Creating stunnel certifcate using openssl
  openssl req -new -x509 -days 9999 -nodes -subj "/C=PH/ST=NCR/L=Manila/O=$MyScriptName/OU=$MyScriptName/CN=$MyScriptName" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem &> /dev/null
-##  > /dev/null 2>&1
 
- # Creating stunnel server config
  cat <<'MyStunnelC' > /etc/stunnel/stunnel.conf
 # My Stunnel Config
 pid = /var/run/stunnel.pid
@@ -185,31 +112,19 @@ socket = l:TCP_NODELAY=1
 socket = r:TCP_NODELAY=1
 TIMEOUTclose = 0
 [stunnel]
-connect = 127.0.0.1:WS_Port1
-accept = WS_Port2
+connect = 127.0.0.1:80
+accept = 8080
 [dropbear]
-accept = Stunnel_Port1
-connect = 127.0.0.1:dropbear_port_c
+accept = 445
+connect = 127.0.0.1:789
 [openssh]
-accept = Stunnel_Port2
-connect = 127.0.0.1:openssh_port_c
+accept = 446
+connect = 127.0.0.1:22
 [openvpn]
-accept = Stunnel_Port3
-connect = 127.0.0.1:MyOvpnPort1
+accept = 444
+connect = 127.0.0.1:112
 MyStunnelC
 
- # setting stunnel ports
- sed -i "s|WS_Port1|$WS_Port1|g" /etc/stunnel/stunnel.conf
- sed -i "s|WS_Port2|$WS_Port2|g" /etc/stunnel/stunnel.conf
- sed -i "s|MyOvpnPort1|$OpenVPN_Port1|g" /etc/stunnel/stunnel.conf
- sed -i "s|Stunnel_Port1|$Stunnel_Port1|g" /etc/stunnel/stunnel.conf
- sed -i "s|dropbear_port_c|$(netstat -tlnp | grep -i dropbear | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
- sed -i "s|Stunnel_Port2|$Stunnel_Port2|g" /etc/stunnel/stunnel.conf
- sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
- sed -i "s|Stunnel_Port3|$Stunnel_Port3|g" /etc/stunnel/stunnel.conf
- sed -i "s|openssh_port_c|$(netstat -tlnp | grep -i ssh | awk '{print $4}' | cut -d: -f2 | xargs | awk '{print $2}' | head -n1)|g" /etc/stunnel/stunnel.conf
-
- # Restarting stunnel service
  systemctl restart $StunnelDir
 
 }
@@ -233,16 +148,13 @@ function InsOpenVPN(){
  firewall-cmd --quiet --permanent --add-service=squid
  firewall-cmd --quiet --reload
 
- # Enabling IPv4 Forwarding
  echo 1 > /proc/sys/net/ipv4/ip_forward
 
 }
 
 function InsProxy(){
- # Removing Duplicate privoxy config
  rm -rf /etc/privoxy/config*
 
- # Creating Privoxy server config using cat eof tricks
  cat <<'myPrivoxy' > /etc/privoxy/config
 # My Privoxy Server Config
 user-manual /usr/share/doc/privoxy/user-manual
@@ -250,8 +162,8 @@ confdir /etc/privoxy
 logdir /var/log/privoxy
 filterfile default.filter
 logfile logfile
-listen-address 0.0.0.0:Privoxy_Port1
-listen-address 0.0.0.0:Privoxy_Port2
+listen-address 0.0.0.0:8686
+listen-address 0.0.0.0:8787
 toggle 1
 enable-remote-toggle 0
 enable-remote-http-toggle 0
@@ -268,27 +180,18 @@ tolerate-pipelining 1
 socket-timeout 300
 permit-access 0.0.0.0/0 IP-ADDRESS
 myPrivoxy
-
- # Setting machine's IP Address inside of our privoxy config(security that only allows this machine to use this proxy server)
  sed -i "s|IP-ADDRESS|$IPADDR|g" /etc/privoxy/config
 
- # Setting privoxy ports
- sed -i "s|Privoxy_Port1|$Privoxy_Port1|g" /etc/privoxy/config
- sed -i "s|Privoxy_Port2|$Privoxy_Port2|g" /etc/privoxy/config
-
- # I'm setting Some Squid workarounds to prevent Privoxy's overflowing file descriptors that causing 50X error when clients trying to connect to your proxy server(thanks for this trick @homer_simpsons)
  apt remove --purge squid -y
  rm -rf /etc/squid/sq*
  apt install squid -y
-
-# Squid Ports (must be 1024 or higher)
 
  cat <<mySquid > /etc/squid/squid.conf
 acl VPN dst $(wget -4qO- http://ipinfo.io/ip)/32
 http_access allow VPN
 http_access deny all
-http_port 0.0.0.0:$Proxy_Port1
-http_port 0.0.0.0:$Proxy_Port2
+http_port 0.0.0.0:6464
+http_port 0.0.0.0:6565
 coredump_dir /var/spool/squid
 dns_nameservers 1.1.1.1 1.0.0.1
 refresh_pattern ^ftp: 1440 20% 10080
@@ -298,22 +201,9 @@ refresh_pattern . 0 20% 4320
 visible_hostname localhost
 mySquid
 
- sed -i "s|SquidCacheHelper|$Proxy_Port1|g" /etc/squid/squid.conf
- sed -i "s|SquidCacheHelper|$Proxy_Port2|g" /etc/squid/squid.conf
-
-sudo apt install ziproxy
- cat <<myziproxy > /etc/ziproxy/ziproxy.conf
- Port = ZIPROXY
- UseContentLength = false
- ImageQuality = {30,25,25,20}
-myziproxy
-
- sed -i "s|ZIPROXY|$ZIPROXY|g" /etc/ziproxy/ziproxy.conf
- # Starting Proxy server
  echo -e "Restarting proxy server.."
  systemctl restart privoxy
  systemctl restart squid
- systemctl restart ziproxy
 }
 
 function ip_address(){
@@ -325,28 +215,17 @@ function ip_address(){
 IPADDR="$(ip_address)"
 
 function ConfStartup(){
- # Daily reboot time of our machine
- # For cron commands, visit https://crontab.guru
  timedatectl set-timezone Asia/Manila
-     #write out current crontab
-     crontab -l > mycron
-     #echo new cron into cron file
-     echo -e "0 3 * * * /sbin/reboot >/dev/null 2>&1" >> mycron
-     echo -e "*/1 * * * * sudo service ziproxy restart" >> mycron
+ crontab -l > mycron
+ echo -e "0 3 * * * /sbin/reboot >/dev/null 2>&1" >> mycron
+ crontab mycron
+ service cron restart
+ echo '0 3 * * * /sbin/reboot >/dev/null 2>&1' >> /etc/cron.d/mycron
 
-     #install new cron file
-     crontab mycron
-     service cron restart
-     echo '0 3 * * * /sbin/reboot >/dev/null 2>&1' >> /etc/cron.d/mycron
-     echo '*/1 * * * * sudo service ziproxy restart' >> /etc/cron.d/mycron
-
-
- # Creating directory for startup script
  rm -rf /etc/juans
  mkdir -p /etc/juans
  chmod -R 777 /etc/juans
 
- # Creating startup script using cat eof tricks
  cat <<'EOFSH' > /etc/juans/startup.sh
 #!/bin/bash
 # Setting server local time
@@ -366,13 +245,10 @@ iptables -A INPUT -s $(wget -4qO- http://ipinfo.io/ip) -p tcp -m multiport --dpo
 EOFSH
  chmod +x /etc/juans/startup.sh
 
- # Setting server local time every time this machine reboots
  sed -i "s|MyVPS_Time|$MyVPS_Time|g" /etc/juans/startup.sh
 
- #
  rm -rf /etc/sysctl.d/99*
 
- # Setting our startup script to run every machine boots
  echo "[Unit]
 Description=Juans Startup Script
 Before=network-online.target
@@ -503,7 +379,6 @@ rm -f *
   echo -e "\033[0;35mUpdating Libraries....\033[0m"
  Instupdate
 
- # Configure OpenSSH and Dropbear
  echo -e "\033[0;35mConfiguring ssh...\033[0m"
  InstSSH
 
@@ -556,18 +431,10 @@ remove
  echo -e " Dropbear: $Dropbear_Port1, $Dropbear_Port2"
  echo -e " Privoxy: $Privoxy_Port1, $Privoxy_Port2"
  echo -e " Squid: $Proxy_Port1, $Proxy_Port2"
- echo -e " Auto-Recon: $ZIPROXY"
  echo -e " NGiNX: $OvpnDownload_Port"
  #echo -e " Webmin: 10000"
  echo -e " Server Reset: 3AM PH Time"
 
  echo -e ""
  echo -e " [Note] DO NOT RESELL THIS SCRIPT"
-
- # Clearing all logs from installation
- rm -rf /root/.bash_history && history -c && echo '' > /var/log/syslog
-
- rm -rf /root/wss*
- rm -rf /root/bb*
-  rm -rf /root/*.zip
-
+ exit 1
